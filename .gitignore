@@ -1,0 +1,4 @@
+node_modules/
+coverage/
+.clasp.token.json
+.DS_Store

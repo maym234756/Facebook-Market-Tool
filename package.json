@@ -1,0 +1,27 @@
+{
+  "name": "facebook-listing-tool-pbc-omg",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local VS Code workflow for the Facebook Listing Tool Apps Script project.",
+  "scripts": {
+    "login": "node scripts/run-clasp.mjs login --no-localhost",
+    "logout": "node scripts/run-clasp.mjs logout",
+    "pull": "node scripts/run-clasp.mjs pull",
+    "push": "node scripts/run-clasp.mjs push",
+    "push:watch": "node scripts/run-clasp.mjs push --watch",
+    "open": "node scripts/run-clasp.mjs open",
+    "deploy": "node scripts/run-clasp.mjs deploy --description VS Code deployment",
+    "build": "node scripts/build.mjs",
+    "sandbox:refresh": "node scripts/refresh-sandbox.mjs",
+    "typecheck": "node scripts/run-tsc.mjs --noEmit",
+    "test": "node scripts/run-vitest.mjs run",
+    "test:watch": "node scripts/run-vitest.mjs",
+    "check": "node scripts/build.mjs"
+  },
+  "devDependencies": {
+    "@google/clasp": "^3.0.6-alpha",
+    "@types/google-apps-script": "^1.0.98",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}

@@ -1,0 +1,1221 @@
+Apps Script Code Review and Upgrade Blueprint
+Date: 2026-04-14
+Scope reviewed:
+- src/Code.js
+- src/Index.html
+- src/Listings.html
+- src/Analytics.html
+- src/Manager.html
+- src/appsscript.json
+
+Purpose of this document
+This review is not only a list of issues. It is meant to function as a practical upgrade guide that explains:
+- what is currently weak or risky
+- why it matters
+- exactly which files should be changed
+- which new files should be added
+- how the project structure could be improved
+- what order the work should happen in
+
+==================================================
+1. Executive Summary
+==================================================
+
+The pulled project works and is already useful, but it is still built more like a fast internal automation tool than a hardened internal application. The three most important weaknesses are:
+
+1. Open deployment access
+2. Non-atomic spreadsheet writes
+3. Fragile OpenAI/API error handling
+
+These are the first areas to improve because they affect security, data integrity, and production reliability.
+
+The HTML pages also work, but they are currently large single-file pages with repeated styling, repeated navigation code, repeated status helpers, and repeated table rendering patterns. That is maintainable in the short term, but it will slow future work and increase the chance of accidental drift across pages.
+
+==================================================
+2. Current Structure Snapshot
+==================================================
+
+Current app structure as reviewed:
+
+Facebook Listing Tool PBC&OMG/
+|-- src/
+|   |-- Code.js
+|   |-- Index.html
+|   |-- Listings.html
+|   |-- Analytics.html
+|   |-- Manager.html
+|   `-- appsscript.json
+|-- sandbox/
+|   |-- README.md
+|   `-- current/
+|-- scripts/
+|   |-- build.mjs
+|   |-- refresh-sandbox.mjs
+|   |-- run-clasp.mjs
+|   |-- run-tsc.mjs
+|   `-- run-vitest.mjs
+|-- tests/
+|   |-- code.sandbox.test.js
+|   |-- smoke.test.js
+|   |-- spreadsheet.behavior.test.js
+|   `-- support/
+|       |-- load-apps-script.js
+|       `-- mock-spreadsheet.js
+|-- README.md
+|-- package.json
+`-- apps-script-review.txt
+
+Main architectural observation:
+- The server-side logic is concentrated almost entirely in one file: src/Code.js
+- Each HTML page contains its own CSS, navigation logic, status logic, and table rendering logic
+- There is no dedicated auth layer, validation layer, logging layer, or service abstraction layer inside the Apps Script source
+
+==================================================
+3. Highest-Priority Findings
+==================================================
+
+3.1 Critical: The web app is publicly reachable while exposing internal operations
+
+Where found:
+- src/appsscript.json:8
+
+What is wrong:
+- The app is deployed with access set to ANYONE_ANONYMOUS.
+- The application is not just a read-only public page. It can load internal operational data and perform writes.
+
+Why it matters:
+- Anyone with the deployed URL may be able to reach internal functionality.
+- This is a business and data exposure risk, not just a code-style issue.
+
+Files that should be changed:
+- src/appsscript.json
+- src/Code.js
+
+What should be changed:
+- Change deployment access from anonymous to a restricted audience.
+- Add a dedicated authorization helper in server-side code.
+- Use that helper before save, update, delete, analytics, and manager-view operations.
+
+Recommended code-level change locations:
+- src/appsscript.json
+	Change webapp.access to a restricted mode.
+- src/Code.js
+	Add a helper near the top of the file such as:
+	- assertAuthorizedUser_()
+	- getCurrentUserEmail_()
+	- isAllowedUser_()
+
+Functions that should call that helper:
+- generateListing
+- saveListing
+- getSalespersonListings
+- clearSalespersonListing
+- updateSalespersonListing
+- getAnalyticsData
+- getManagerViewData
+
+Suggested addition if you keep Code.js split in one file:
+
+src/
+|-- Code.js
+|-- Security.gs    <- add
+`-- appsscript.json
+
+Suggested responsibility for Security.gs:
+- user allowlist checks
+- current-user lookup
+- reusable authorization guards
+
+--------------------------------------------------
+3.2 High: Spreadsheet writes are vulnerable to concurrent collisions and partial writes
+--------------------------------------------------
+
+Where found:
+- src/Code.js:456
+- src/Code.js:494-499
+- src/Code.js:546-566
+- src/Code.js:571-591
+
+What is wrong:
+- saveListing finds the first blank row, then writes one cell at a time.
+- update and clear operations also write one cell at a time.
+
+Why it matters:
+- Two users saving at the same time can hit the same row.
+- If execution stops during a multi-cell write, the row can be partially updated.
+- Multiple setValue calls are slower and noisier than a grouped write.
+
+Files that should be changed:
+- src/Code.js
+
+What should be changed:
+- Wrap save/update/delete operations in LockService.
+- Replace repeated cell writes with grouped range writes.
+- Where possible, batch clear operations too.
+
+Recommended code-level change locations:
+- saveListing
+	Add lock acquisition before reading blank-row state.
+	Replace separate setValue calls with one grouped write plan.
+- clearSalespersonListing
+	Use grouped clearing instead of six separate clearContent calls.
+- updateSalespersonListing
+	Use grouped write instead of six separate setValue calls.
+
+Suggested addition if splitting responsibilities:
+
+src/
+|-- Code.js
+|-- ListingsService.gs   <- add
+`-- Security.gs
+
+Suggested responsibility for ListingsService.gs:
+- save listing row
+- update listing row
+- clear listing row
+- row-locking helpers
+- row-shape normalization
+
+--------------------------------------------------
+3.3 High: OpenAI integration is brittle and not defensive enough
+--------------------------------------------------
+
+Where found:
+- src/Code.js:249
+- src/Code.js:425-445
+
+What is wrong:
+- The response is parsed as JSON without checking the HTTP status first.
+- There is no structured retry path.
+- There is no defensive parse failure handling.
+- There is no clear operational logging path.
+
+Why it matters:
+- External APIs fail in ways that are often not clean JSON.
+- A malformed or non-JSON response currently becomes a generic low-level parse failure.
+- This makes production troubleshooting harder.
+
+Files that should be changed:
+- src/Code.js
+
+What should be changed:
+- Extract OpenAI request logic into a dedicated helper or service file.
+- Check response code before parsing.
+- Wrap JSON.parse in try/catch.
+- Log failures with enough detail for support without leaking secrets.
+- Add response-shape validation.
+
+Recommended code-level change locations:
+- generateListing
+	Keep prompt preparation here only if desired.
+- New helper or file
+	Move the actual OpenAI request/response handling into a dedicated layer.
+
+Suggested addition:
+
+src/
+|-- Code.js
+|-- AiService.gs        <- add
+|-- Security.gs
+`-- ListingsService.gs
+
+Suggested responsibility for AiService.gs:
+- prompt assembly helpers
+- OpenAI request execution
+- HTTP code handling
+- parse fallback handling
+- error normalization
+- logging around failures
+
+==================================================
+4. Medium-Priority Findings
+==================================================
+
+4.1 Medium: Listings page can hide partially populated records
+
+Where found:
+- src/Listings.html:607
+
+What is wrong:
+- The UI keeps rows only when Column B is truthy.
+- If a row has content in D, E, F, G, or H but not B, it disappears from the UI.
+
+Why it matters:
+- The spreadsheet can contain a row that the app no longer shows.
+- Support cleanup becomes harder because the UI stops matching the sheet.
+
+Files that should be changed:
+- src/Listings.html
+- optionally src/Code.js
+
+What should be changed:
+- Prefer filtering server-side in getSalespersonListings.
+- If kept client-side, filter on whether any important listing column contains data.
+
+Recommended code-level change locations:
+- src/Listings.html
+	renderTable filtering loop
+- src/Code.js
+	getSalespersonListings return shaping logic if you want the server to send already filtered rows
+
+--------------------------------------------------
+4.2 Medium: Manager view is hard-coded to OMG instead of using a configuration pattern
+--------------------------------------------------
+
+Where found:
+- src/Code.js:721-723
+
+What is wrong:
+- getManagerViewData hard-codes a spreadsheet ID.
+
+Why it matters:
+- It is less flexible than the region map used elsewhere.
+- It is harder to extend later.
+
+Files that should be changed:
+- src/Code.js
+
+What should be changed:
+- Introduce a dedicated manager-view configuration constant or mapping.
+- Optionally make the manager page explicitly region-aware.
+
+Suggested code structure:
+
+src/
+|-- Code.js
+|-- Config.gs          <- add
+`-- ManagerService.gs  <- add
+
+Suggested responsibility for Config.gs:
+- region map
+- helper-sheet map
+- manager-view map
+- shared constant ownership in one place
+
+--------------------------------------------------
+4.3 Medium: Front-end pages contain repeated markup, repeated CSS, and repeated script helpers
+--------------------------------------------------
+
+Where found:
+- src/Index.html
+- src/Listings.html
+- src/Analytics.html
+- src/Manager.html
+
+What is wrong:
+- Shared branding/header/nav blocks are duplicated.
+- Shared styling variables are duplicated.
+- Shared helper logic such as setStatus, updateNavLinks, region persistence, and table patterns are repeated.
+
+Why it matters:
+- Repeated UI code increases maintenance cost.
+- Fixes and enhancements will have to be repeated manually in several places.
+- Over time, the pages can drift apart unintentionally.
+
+Files that should be changed:
+- src/Index.html
+- src/Listings.html
+- src/Analytics.html
+- src/Manager.html
+
+Files that should be added:
+- src/_shared/Styles.html
+- src/_shared/Nav.html
+- src/_shared/Common.js.html
+- src/_shared/TableHelpers.js.html
+
+Suggested scaffold:
+
+src/
+|-- Code.js
+|-- Index.html
+|-- Listings.html
+|-- Analytics.html
+|-- Manager.html
+|-- _shared/
+|   |-- Styles.html
+|   |-- Nav.html
+|   |-- Common.js.html
+|   `-- TableHelpers.js.html
+`-- appsscript.json
+
+How this would help:
+- one shared style source
+- one shared navigation source
+- one shared region/status helper source
+- lighter page files that are easier to reason about
+
+--------------------------------------------------
+4.4 Medium: Front-end behavior may become inconsistent when many outside users access the app at the same time
+--------------------------------------------------
+
+Where found:
+- src/Index.html
+- src/Listings.html
+- src/Analytics.html
+- src/Manager.html
+- src/Code.js
+
+What is wrong:
+- The current UI assumes a relatively light internal-user workflow and does not include client-side protections for repeated clicks, duplicate submits, stale screen state, or slow response timing.
+- Some actions disable a button temporarily, but this is not applied consistently across the whole application.
+- Large table pages render entire datasets at once, which can become slow or visually unstable when many users are loading large datasets from shared sheets.
+
+Why it matters:
+- When more outside users begin using the app, traffic spikes can make Apps Script calls slower and expose race conditions in the UI.
+- Users may click Save, Refresh, Edit, or Delete multiple times if the screen does not clearly show loading or lock interaction state.
+- Larger concurrent demand can make analytics and manager pages feel frozen because the browser is rebuilding large tables on the main thread.
+
+Possible user-facing problems:
+- Duplicate listing saves caused by repeated clicks during slow responses
+- Users seeing stale dropdown selections or stale tables after switching regions quickly
+- UI flicker or delayed rendering on analytics/manager pages when large tables are redrawn
+- Multiple open tabs by the same user causing confusion because localStorage shares selectedRegion across tabs
+- One user changing sheet data while another user is still looking at an older on-screen table snapshot
+
+Files that should be changed:
+- src/Index.html
+- src/Listings.html
+- src/Analytics.html
+- src/Manager.html
+- optionally src/Code.js
+
+What should be changed:
+- Add a consistent loading-state system for all server calls
+- Disable action buttons during in-flight requests, not just some of them
+- Add request sequencing or stale-response guards when region changes quickly
+- Add empty-state, timeout-state, and retry-state UI patterns
+- Consider pagination, chunking, or partial rendering for large tables
+
+Recommended code-level change locations:
+- src/Index.html
+	generateListing, saveListing, loadRegionData, loadBoats, loadBoatDetails
+- src/Listings.html
+	loadRegionData, loadListings, saveEdit, deleteListing
+- src/Analytics.html
+	loadAnalytics, renderAnalyticsTable
+- src/Manager.html
+	loadManagerView, renderManagerTable
+
+Suggested front-end utility additions:
+
+src/
+|-- _shared/
+|   |-- RequestState.js.html      <- add
+|   |-- StatusBanner.js.html      <- add
+|   `-- TableVirtualization.js.html  <- optional add later
+
+Suggested responsibility:
+- RequestState.js.html
+	- prevent duplicate submissions
+	- standardize loading/disabled states
+	- ignore stale async responses
+- StatusBanner.js.html
+	- show consistent success, warning, and failure messages
+- TableVirtualization.js.html
+	- optional later improvement for very large analytics/manager tables
+
+--------------------------------------------------
+4.5 Medium: Browser and operating system differences can create UI and workflow issues
+--------------------------------------------------
+
+Where found:
+- src/Index.html: navigator.clipboard usage
+- all HTML pages: sticky tables, localStorage, large inline scripts, external image loading
+
+What is wrong:
+- The UI currently assumes common browser APIs will behave uniformly.
+- That is usually fine for modern Chrome and Edge, but there are still practical differences in clipboard behavior, sticky table rendering, font rendering, scroll behavior, and local browser privacy/security settings.
+
+Why it matters:
+- If the app is used by a broader outside audience, support issues will often be browser-specific rather than code-specific.
+- Edge and Chrome are both Chromium-based, but enterprise policies, security settings, profile restrictions, extensions, and OS-level permission models can still change behavior.
+- Windows and macOS can render spacing, scrolling, and table density differently. Mobile browsers would be even more fragile if they ever become relevant.
+
+Potential browser/OS-specific issues:
+
+Clipboard behavior
+- src/Index.html uses navigator.clipboard.writeText.
+- In some environments this fails because of browser policy, insecure context rules, permission restrictions, or blocked clipboard access.
+- Edge in managed enterprise environments may block clipboard permissions differently than Chrome.
+
+Sticky table headers and large tables
+- Analytics and Manager pages rely on sticky headers and heavy DOM table rendering.
+- Different browsers can behave differently with overflow containers and sticky positioning.
+- On lower-powered Windows machines the large tables may feel worse than on newer hardware.
+
+localStorage cross-tab behavior
+- The pages store selectedRegion in localStorage.
+- If a user opens multiple tabs, one tab can silently affect the region state used by another tab.
+- This is not a browser bug, but it can feel like one to users.
+
+External image loading and network policy
+- Brand images are loaded from external websites.
+- Slow networks, content filtering, browser privacy features, or corporate proxy rules can delay or block those images.
+- That can create broken or uneven page header rendering.
+
+Font and layout differences
+- The UI relies on Segoe UI first, then Arial.
+- On Windows, Segoe UI usually renders as expected.
+- On macOS and some managed environments, fallback fonts may change spacing and table density slightly.
+
+Large inline script maintainability and browser debugging
+- Because scripts are embedded directly into the HTML files, browser debugging and long-term support are harder than if shared logic were split more cleanly.
+
+Files that should be changed:
+- src/Index.html
+- src/Listings.html
+- src/Analytics.html
+- src/Manager.html
+
+Files that could be added:
+- src/_shared/BrowserSupport.js.html
+- src/_shared/Clipboard.js.html
+- src/_shared/Images.html
+
+What should be changed:
+- Add clipboard fallback behavior and explicit failure messaging
+- Add lightweight browser capability checks for important APIs
+- Consider local placeholder handling if remote logos fail to load
+- Standardize table container sizing and test sticky behavior across Chrome and Edge on Windows
+- Avoid relying on localStorage as the only state source for region when multiple tabs are open
+
+Recommended code-level change locations:
+- src/Index.html
+	copyListing should include a catch path and possibly a textarea-select fallback
+- src/Analytics.html and src/Manager.html
+	table rendering should be reviewed for heavy DOM cost and sticky/overflow behavior
+- src/Listings.html and src/Index.html
+	region state logic should avoid surprising cross-tab side effects
+
+Suggested compatibility test matrix:
+
+Desktop browsers
+- Chrome on Windows 10/11
+- Edge on Windows 10/11
+- Chrome on macOS
+- Edge on macOS if the user base may use it
+
+Scenarios to test manually
+- first page load on slow network
+- copy listing action
+- generating listing twice quickly
+- saving listing twice quickly
+- region switching across two open tabs
+- large analytics table scrolling
+- manager page refresh with slow Apps Script response
+
+==================================================
+5. Lower-Priority Findings
+==================================================
+
+5.1 Low: Clipboard handling has no fallback path
+
+Where found:
+- src/Index.html:694-701
+
+What is wrong:
+- Copy success is handled, but copy failure is not.
+
+Suggested change:
+- Add a catch path and a backup message for blocked clipboard access.
+
+Files to change:
+- src/Index.html
+
+5.2 Low: Unused constant suggests incomplete or dead design
+
+Where found:
+- src/Code.js:30
+
+What is wrong:
+- NON_SALESPERSON_TABS appears unused in the reviewed source.
+
+Suggested change:
+- Remove it if truly unused, or implement the logic it was intended to support.
+
+Files to change:
+- src/Code.js
+
+==================================================
+6. Recommended Target Structure
+==================================================
+
+If the project stays relatively small, a good next-stage Apps Script structure would look like this:
+
+src/
+|-- Code.js
+|-- Config.gs
+|-- Security.gs
+|-- AiService.gs
+|-- ListingsService.gs
+|-- AnalyticsService.gs
+|-- ManagerService.gs
+|-- Index.html
+|-- Listings.html
+|-- Analytics.html
+|-- Manager.html
+|-- _shared/
+|   |-- Styles.html
+|   |-- Nav.html
+|   |-- Common.js.html
+|   `-- TableHelpers.js.html
+`-- appsscript.json
+
+Role of each suggested file:
+
+Code.js
+- page routing
+- high-level orchestration only
+
+Config.gs
+- region IDs
+- helper-sheet names
+- manager-view config
+- shared constants
+
+Security.gs
+- authorization checks
+- current-user helpers
+- internal access rules
+
+AiService.gs
+- OpenAI request execution
+- prompt helpers
+- response parsing and normalization
+- AI-related logging
+
+ListingsService.gs
+- save/update/delete listing row logic
+- row targeting logic
+- write locking and grouped writes
+
+AnalyticsService.gs
+- analytics sheet reads
+- region/view filtering
+
+ManagerService.gs
+- manager-view reads
+- manager-specific configuration and shaping
+
+_shared/Styles.html
+- one shared style include for all pages
+
+_shared/Nav.html
+- one shared nav include for all pages
+
+_shared/Common.js.html
+- shared region handling
+- status display helpers
+- reusable page initialization helpers
+
+_shared/TableHelpers.js.html
+- common table creation
+- column-width application
+- table clear/render helpers
+
+==================================================
+7. File-by-File Upgrade Map
+==================================================
+
+This section explains exactly what to edit or add.
+
+7.1 src/appsscript.json
+
+Change:
+- Restrict deployment access
+
+Why:
+- Current access level is too open for an internal operational tool
+
+Priority:
+- Critical
+
+7.2 src/Code.js
+
+Change:
+- Reduce it from an all-in-one server file into an orchestrator
+- Move security, AI, listings write logic, analytics shaping, and manager shaping into dedicated files
+
+Why:
+- The file currently mixes routing, configuration, data access, AI integration, write operations, and manager logic
+
+Priority:
+- High
+
+7.3 src/Index.html
+
+Change:
+- Extract shared nav/styles/helpers
+- Add clipboard failure handling
+- Keep page-specific generation/save UI logic local
+
+Why:
+- This page should remain the generator page, but not also own duplicated shared infrastructure
+
+Priority:
+- Medium
+
+7.4 src/Listings.html
+
+Change:
+- Fix row filtering logic
+- Move repeated nav/styles/helpers into shared includes
+- Keep edit modal and listing-management behavior local
+
+Why:
+- Current filtering can hide real sheet rows
+
+Priority:
+- Medium
+
+7.5 src/Analytics.html
+
+Change:
+- Move repeated nav/styles/helpers into shared includes
+- Keep analytics-specific rendering local
+
+Why:
+- Mostly maintainability and consistency improvement
+
+Priority:
+- Medium
+
+7.6 src/Manager.html
+
+Change:
+- Move repeated nav/styles/helpers into shared includes
+- Optionally make manager view configuration-driven if it remains region-aware later
+
+Why:
+- Mostly maintainability and future extensibility
+
+Priority:
+- Medium
+
+7.7 New file: src/Security.gs
+
+Add:
+- auth checks
+- privileged-operation guards
+
+Priority:
+- Critical
+
+7.8 New file: src/AiService.gs
+
+Add:
+- all OpenAI request/parse/error logic
+
+Priority:
+- High
+
+7.9 New file: src/ListingsService.gs
+
+Add:
+- locking
+- grouped writes
+- row-selection rules
+
+Priority:
+- High
+
+7.10 New file: src/Config.gs
+
+Add:
+- all constant maps and shared config values
+
+Priority:
+- Medium
+
+==================================================
+8. Suggested Upgrade Order
+==================================================
+
+Recommended order of implementation:
+
+Phase 1: Security and correctness
+1. Lock down appsscript.json deployment access
+2. Add Security.gs and authorization guards
+3. Add locking and grouped writes for listing save/update/delete
+4. Harden the OpenAI request path
+
+Phase 2: Maintainability
+1. Introduce Config.gs
+2. Extract AiService.gs, ListingsService.gs, AnalyticsService.gs, ManagerService.gs
+3. Reduce Code.js to routing/orchestration
+
+Phase 3: Front-end cleanup
+1. Create shared HTML includes for nav and styles
+2. Create shared JS helpers for status/region/table logic
+3. Reduce duplication in Index/Listings/Analytics/Manager pages
+
+Phase 4: Testing and observability
+1. Add more local tests for save/update/delete edge cases
+2. Add tests for authorization failures
+3. Add tests for OpenAI error handling branches
+4. Add structured logging for production failures
+
+==================================================
+9. Suggested New Test Coverage
+==================================================
+
+Tests that should be added in the local sandbox:
+
+tests/
+|-- auth.behavior.test.js                <- add
+|-- ai-service.behavior.test.js          <- add
+|-- listing-write-collision.test.js      <- add
+|-- listings-filtering.behavior.test.js  <- add
+`-- manager-config.behavior.test.js      <- add
+
+What they should cover:
+
+auth.behavior.test.js
+- rejects unauthorized users
+- allows authorized users
+
+ai-service.behavior.test.js
+- handles non-200 responses
+- handles malformed JSON
+- handles missing output_text
+
+listing-write-collision.test.js
+- lock usage
+- grouped write correctness
+- row selection behavior
+
+listings-filtering.behavior.test.js
+- partially filled rows remain visible when they should
+
+manager-config.behavior.test.js
+- manager-view spreadsheet resolution rules
+
+==================================================
+10. Final Assessment
+==================================================
+
+This project does not need a rewrite. It needs hardening and separation of concerns.
+
+The safest and highest-value improvements are:
+- restrict access
+- add authorization checks
+- make writes atomic
+- make AI error handling defensive
+
+After that, the best investment is to split responsibilities across a few small Apps Script files and shared HTML includes. That will make future changes faster, safer, and easier to test.
+
+In plain terms:
+- The app already works.
+- The main risks are security, write safety, and maintainability.
+- The recommended changes are practical and incremental.
+- Most of the needed improvement can be done without changing the business workflow the team already uses.
+
+==================================================
+11. Real-World Failure Scenarios
+==================================================
+
+This section translates the technical findings into realistic user situations that could happen in production.
+
+Scenario 1: User double-clicks Save on a slow connection
+
+What happens:
+- A salesperson generates a listing.
+- The network or Apps Script response is slow.
+- The user clicks Save more than once because there is no strong, app-wide request lock pattern.
+
+Possible result:
+- Duplicate rows may be written.
+- The same row may be partially or incorrectly updated under concurrency.
+
+Primary files involved:
+- src/Index.html
+- src/Code.js
+
+Recommended mitigation:
+- Add consistent in-flight request locking in the UI.
+- Add LockService and grouped writes on the server side.
+
+--------------------------------------------------
+Scenario 2: Two users save listings at nearly the same time
+--------------------------------------------------
+
+What happens:
+- Two users are working in the same salesperson tab or the same region.
+- Both save near the same time.
+- The code selects the next available blank row independently for each request.
+
+Possible result:
+- One save can overwrite another.
+- A row can become mixed or partially correct.
+
+Primary files involved:
+- src/Code.js
+
+Recommended mitigation:
+- Add LockService around row selection and write operations.
+- Use grouped range writes instead of multiple single-cell writes.
+
+--------------------------------------------------
+Scenario 3: User changes region quickly and receives stale UI data
+--------------------------------------------------
+
+What happens:
+- A user switches regions quickly.
+- The first request returns after the second request.
+- The page applies an older response after a newer selection has already been made.
+
+Possible result:
+- Dropdowns or tables show data for the wrong region.
+- The user thinks they are saving into one region while looking at another region's stale data.
+
+Primary files involved:
+- src/Index.html
+- src/Listings.html
+- src/Analytics.html
+
+Recommended mitigation:
+- Add request tokens or stale-response guards.
+- Ignore responses that do not match the most recent requested region.
+
+--------------------------------------------------
+Scenario 4: Edge or Chrome blocks clipboard copy
+--------------------------------------------------
+
+What happens:
+- A user clicks Copy Listing.
+- Browser security policy, enterprise policy, or permission settings block clipboard access.
+
+Possible result:
+- Nothing happens from the user's perspective.
+- The user thinks the app is broken even though listing generation succeeded.
+
+Primary files involved:
+- src/Index.html
+
+Recommended mitigation:
+- Add a catch handler around clipboard calls.
+- Show a clear fallback message.
+- Optionally select the textarea content so the user can copy manually.
+
+--------------------------------------------------
+Scenario 5: User opens multiple tabs and region state becomes confusing
+--------------------------------------------------
+
+What happens:
+- A user opens multiple tabs for different regions.
+- The app stores selectedRegion in localStorage.
+- One tab updates localStorage and another tab reads the changed region later.
+
+Possible result:
+- Navigation links or default region state can feel inconsistent.
+- The user may think the app is randomly switching regions.
+
+Primary files involved:
+- src/Index.html
+- src/Listings.html
+- src/Analytics.html
+- src/Manager.html
+
+Recommended mitigation:
+- Use URL parameters as the primary source of truth when possible.
+- Limit reliance on shared localStorage state across tabs.
+- Consider tab-specific state handling where practical.
+
+--------------------------------------------------
+Scenario 6: Analytics or Manager tables become slow on lower-powered machines
+--------------------------------------------------
+
+What happens:
+- A large dataset is returned.
+- The page renders the full table in one pass.
+- The browser must build and style a large DOM tree with sticky headers and width adjustments.
+
+Possible result:
+- The page feels frozen.
+- Scrolling becomes janky.
+- Users may think the app has crashed.
+
+Primary files involved:
+- src/Analytics.html
+- src/Manager.html
+
+Recommended mitigation:
+- Add loading indicators that remain visible during render.
+- Consider pagination, chunked rendering, or virtualization if data volume grows.
+- Test on lower-powered Windows laptops, not only high-performance developer machines.
+
+--------------------------------------------------
+Scenario 7: External logo images fail to load on corporate or filtered networks
+--------------------------------------------------
+
+What happens:
+- The page tries to load remote images from external company websites.
+- The browser, network, or proxy blocks them.
+
+Possible result:
+- The page header looks broken or unfinished.
+- Users may think the app loaded incorrectly.
+
+Primary files involved:
+- src/Index.html
+- src/Listings.html
+- src/Analytics.html
+- src/Manager.html
+
+Recommended mitigation:
+- Add image fallback handling or local hosted assets.
+- Ensure header layout remains stable even when images fail.
+
+--------------------------------------------------
+Scenario 8: OpenAI returns malformed or unexpected content during peak usage
+--------------------------------------------------
+
+What happens:
+- The external AI service returns a temporary error, malformed JSON, or a nonstandard response body.
+- The current code tries to parse it directly.
+
+Possible result:
+- Listing generation fails with an unhelpful message.
+- Users may retry repeatedly, causing extra load and confusion.
+
+Primary files involved:
+- src/Code.js
+
+Recommended mitigation:
+- Add response-code checks, parse guards, controlled error messages, and logging.
+- Provide a user-facing retry message that is clear but not overly technical.
+
+--------------------------------------------------
+Scenario 9: Unauthorized outside user reaches internal views
+--------------------------------------------------
+
+What happens:
+- Someone outside the intended audience gets the deployed web app URL.
+- The app is still configured broadly enough to allow access.
+
+Possible result:
+- Internal operational data becomes visible.
+- Write actions could potentially be attempted by the wrong audience.
+
+Primary files involved:
+- src/appsscript.json
+- src/Code.js
+
+Recommended mitigation:
+- Restrict deployment access.
+- Add server-side authorization checks before protected operations.
+
+--------------------------------------------------
+Scenario 10: A support issue is reported but the app has too little logging to diagnose it quickly
+--------------------------------------------------
+
+What happens:
+- A user says saving failed, copy failed, or a table loaded incorrectly.
+- The app shows only a generic message.
+- There is little structured logging around request failures or malformed external responses.
+
+Possible result:
+- Troubleshooting takes longer than necessary.
+- Support has to reproduce issues manually instead of reading operational logs.
+
+Primary files involved:
+- src/Code.js
+- all HTML pages where UI actions are initiated
+
+Recommended mitigation:
+- Add structured server-side logging.
+- Normalize user-facing error messages.
+- Log important failure categories without exposing secrets.
+
+==================================================
+12. Recommended Immediate Fixes This Week
+==================================================
+
+These are the highest-value improvements that can be made quickly without requiring a full restructuring of the app.
+
+Immediate Fix 1: Restrict deployment access
+
+Why now:
+- This is the most serious risk in the entire project.
+- It directly affects exposure of internal operations and data.
+
+Files to change:
+- src/appsscript.json
+
+Expected result:
+- The app is no longer broadly reachable by unintended outside users.
+
+Immediate Fix 2: Add server-side authorization checks for protected functions
+
+Why now:
+- Restricting deployment is important, but server-side protection should not rely only on deployment settings.
+
+Files to change:
+- src/Code.js
+
+Files to add:
+- src/Security.gs
+
+Expected result:
+- Save, update, delete, analytics, and manager actions become protected by code-level access checks.
+
+Immediate Fix 3: Make listing writes atomic
+
+Why now:
+- This reduces the risk of duplicate or corrupted listing rows under concurrent usage.
+
+Files to change:
+- src/Code.js
+
+Files to add if separating responsibilities immediately:
+- src/ListingsService.gs
+
+Expected result:
+- Save, update, and clear operations become safer and more reliable under real usage.
+
+Immediate Fix 4: Harden OpenAI response handling
+
+Why now:
+- External API reliability is a production risk and a support burden.
+
+Files to change:
+- src/Code.js
+
+Files to add if separating responsibilities immediately:
+- src/AiService.gs
+
+Expected result:
+- Listing generation fails more gracefully and is easier to diagnose.
+
+Immediate Fix 5: Add duplicate-click protection to UI write actions
+
+Why now:
+- This is a practical front-end guard that reduces accidental repeat actions immediately.
+
+Files to change:
+- src/Index.html
+- src/Listings.html
+
+Expected result:
+- Fewer accidental duplicate saves and repeated edit/delete actions.
+
+Immediate Fix 6: Fix Listings page row filtering logic
+
+Why now:
+- This is a visible data-quality and support issue.
+
+Files to change:
+- src/Listings.html
+- optionally src/Code.js
+
+Expected result:
+- The UI becomes more trustworthy because it better matches the sheet contents.
+
+Suggested one-week execution order:
+1. Lock down deployment access
+2. Add server-side auth guard
+3. Add atomic save/update/delete behavior
+4. Harden OpenAI failure handling
+5. Add duplicate-click protection in UI
+6. Fix Listings filtering behavior
+
+==================================================
+13. Recommended Next-Month Refactors
+==================================================
+
+These are the changes that are worth doing after the immediate security and reliability issues are under control.
+
+Next-Month Refactor 1: Split Code.js into focused server-side service files
+
+Why:
+- Code.js currently owns too many responsibilities.
+
+Files to add:
+- src/Config.gs
+- src/Security.gs
+- src/AiService.gs
+- src/ListingsService.gs
+- src/AnalyticsService.gs
+- src/ManagerService.gs
+
+Expected result:
+- Smaller files, cleaner ownership, easier debugging, and easier testing.
+
+Next-Month Refactor 2: Extract shared HTML includes
+
+Why:
+- The UI pages currently repeat layout, styling, and helper logic.
+
+Files to add:
+- src/_shared/Styles.html
+- src/_shared/Nav.html
+- src/_shared/Common.js.html
+- src/_shared/TableHelpers.js.html
+
+Files to change:
+- src/Index.html
+- src/Listings.html
+- src/Analytics.html
+- src/Manager.html
+
+Expected result:
+- Less duplication and fewer future front-end inconsistencies.
+
+Next-Month Refactor 3: Add a shared request-state front-end helper
+
+Why:
+- The app needs a more standardized response to loading, stale responses, retries, and action locking.
+
+Files to add:
+- src/_shared/RequestState.js.html
+- src/_shared/StatusBanner.js.html
+
+Expected result:
+- More consistent UI behavior under slow or concurrent usage.
+
+Next-Month Refactor 4: Improve compatibility and user-experience resilience
+
+Why:
+- Browser and operating system variations become more visible as the audience grows.
+
+Files to change:
+- src/Index.html
+- src/Listings.html
+- src/Analytics.html
+- src/Manager.html
+
+Possible new files:
+- src/_shared/Clipboard.js.html
+- src/_shared/BrowserSupport.js.html
+
+Expected result:
+- Fewer browser-specific support issues and clearer fallback behavior.
+
+Next-Month Refactor 5: Expand test coverage around failure paths
+
+Why:
+- The most important failures in this app are operational, concurrency-related, and external-service-related.
+
+Files to add:
+- tests/auth.behavior.test.js
+- tests/ai-service.behavior.test.js
+- tests/listing-write-collision.test.js
+- tests/listings-filtering.behavior.test.js
+- tests/manager-config.behavior.test.js
+
+Expected result:
+- Safer future refactors and easier validation before pushing changes to Apps Script.
+
+==================================================
+14. Practical Decision Guide
+==================================================
+
+If the goal is maximum risk reduction with minimal code movement:
+- Do Sections 12.1 through 12.6 first.
+
+If the goal is long-term maintainability after stabilization:
+- Do Section 13 after the immediate fixes are complete.
+
+If the goal is preparing for broader external use:
+- Prioritize deployment access restriction, auth checks, request-state handling, browser fallback behavior, and logging before expanding audience size.

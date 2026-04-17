@@ -1,0 +1,69 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Apps Script: Install Dependencies",
+      "type": "shell",
+      "command": "npm.cmd",
+      "args": [
+        "install"
+      ],
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Apps Script: Login",
+      "type": "shell",
+      "command": "npm.cmd",
+      "args": [
+        "run",
+        "login"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Apps Script: Pull",
+      "type": "shell",
+      "command": "npm.cmd",
+      "args": [
+        "run",
+        "pull"
+      ],
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Apps Script: Check",
+      "type": "shell",
+      "command": "npm.cmd",
+      "args": [
+        "run",
+        "check"
+      ],
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "Apps Script: Push",
+      "type": "shell",
+      "command": "npm.cmd",
+      "args": [
+        "run",
+        "push"
+      ],
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Apps Script: Watch Push",
+      "type": "shell",
+      "command": "npm.cmd",
+      "args": [
+        "run",
+        "push:watch"
+      ],
+      "isBackground": true,
+      "problemMatcher": []
+    }
+  ]
+}

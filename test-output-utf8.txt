@@ -1,0 +1,1234 @@
+﻿
+> facebook-listing-tool-pbc-omg@1.0.0 test
+> node scripts/run-vitest.mjs run
+
+npm.cmd : 2026-04-14T22:50:48.910Z vite:config config file loaded in 23.44ms
+At line:1 char:145
++ ... tVariable('Path','User'); npm.cmd run test *> test-output.txt; Write- ...
++                               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (2026-04-14T22:5...aded in 23.44ms:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+2026-04-14T22:50:48.914Z vite:env loading env files: [
+  'C:/Users/dhamp/Facebook Listing Tool PBC&OMG/.env',
+  'C:/Users/dhamp/Facebook Listing Tool PBC&OMG/.env.local',
+  'C:/Users/dhamp/Facebook Listing Tool PBC&OMG/.env.test',
+  'C:/Users/dhamp/Facebook Listing Tool PBC&OMG/.env.test.local'
+]
+2026-04-14T22:50:48.914Z vite:env env files loaded in 0.39ms
+2026-04-14T22:50:48.915Z vite:env using resolved env: {}
+2026-04-14T22:50:48.923Z vite:config using resolved config: {
+  test: {
+    environment: 'node',
+    include: [ 'tests/**/*.test.js' ],
+    poolOptions: { threads: { isolate: undefined }, forks: { isolate: undefined } }
+  },
+  configFile: 'C:/Users/dhamp/Facebook Listing Tool PBC&OMG/vitest.config.js',
+  mode: 'test',
+  plugins: [
+    'vite:optimized-deps',
+    'vite:watch-package-data',
+    'vite:pre-alias',
+    'alias',
+    'vitest',
+    'vitest:ssr-replacer',
+    'vitest:css-disable',
+    'vitest:resolve-core',
+    'vite:modulepreload-polyfill',
+    'vite:resolve',
+    'vite:html-inline-proxy',
+    'vite:css',
+    'vite:esbuild',
+    'vite:json',
+    'vite:wasm-helper',
+    'vite:worker',
+    'vite:asset',
+    'vitest:coverage-transform',
+    'vitest:normalize-optimizer',
+    'vite:wasm-fallback',
+    'vite:define',
+    'vite:css-post',
+    'vite:worker-import-meta-url',
+    'vite:asset-import-meta-url',
+    'vite:dynamic-import-vars',
+    'vite:import-glob',
+    'vitest:css-empty-post',
+    'vitest:mocks',
+    'vitest:automock',
+    'vitest:normalize-url',
+    'vite:client-inject',
+    'vite:css-analysis',
+    'vite:import-analysis'
+  ],
+  define: { 'process.env.NODE_ENV': 'process.env.NODE_ENV' },
+  esbuild: {
+    jsxDev: true,
+    charset: 'utf8',
+    legalComments: 'inline',
+    target: 'node18',
+    sourcemap: 'external'
+  },
+  resolve: {
+    externalConditions: [ 'node', 'module-sync' ],
+    extensions: [
+      '.mjs',  '.js',
+      '.mts',  '.ts',
+      '.jsx',  '.tsx',
+      '.json'
+    ],
+    dedupe: [],
+    noExternal: [],
+    external: [],
+    preserveSymlinks: false,
+    alias: [
+      {
+        find: /^\/?@vite\/env/,
+        replacement: '/@fs/C:/Users/dhamp/Facebook Listing Tool PBC&OMG/node_modules/vite/dist/client/env.mjs'
+      },
+      {
+        find: /^\/?@vite\/client/,
+        replacement: '/@fs/C:/Users/dhamp/Facebook Listing Tool PBC&OMG/node_modules/vite/dist/client/client.mjs'
+      }
+    ],
+    mainFields: [],
+    conditions: [ 'node', 'development|production' ],
+    builtins: []
+  },
+  server: {
+    port: 5173,
+    strictPort: false,
+    host: undefined,
+    allowedHosts: [],
+    https: undefined,
+    open: false,
+    proxy: undefined,
+    cors: {
+      origin: /^https?:\/\/(?:(?:[^:]+\.)?localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/
+    },
+    headers: {},
+    warmup: { clientFiles: [], ssrFiles: [] },
+    middlewareMode: true,
+    fs: {
+      strict: true,
+      deny: [ '.env', '.env.*', '*.{crt,pem}', '**/.git/**' ],
+      allow: [
+        'C:/Users/dhamp/Facebook Listing Tool PBC&OMG',
+        'C:/Users/dhamp/Facebook Listing Tool PBC&OMG',
+        'C:/Users/dhamp/Facebook Listing Tool PBC&OMG/node_modules/vitest'
+      ]
+    },
+    preTransformRequests: false,
+    perEnvironmentStartEndDuringDev: false,
+    perEnvironmentWatchChangeDuringDev: false,
+    sourcemapIgnoreList: [Function: isInNodeModules],
+    hmr: false,
+    ws: false,
+    watch: null
+  },
+  build: {
+    target: [ 'chrome107', 'edge107', 'firefox104', 'safari16' ],
+    polyfillModulePreload: true,
+    modulePreload: { polyfill: true },
+    outDir: 'dummy-non-existing-folder',
+    assetsDir: 'assets',
+    assetsInlineLimit: 4096,
+    sourcemap: false,
+    terserOptions: {},
+    rollupOptions: {},
+    commonjsOptions: { include: [ /node_modules/ ], extensions: [ '.js', '.cjs' ] },
+    dynamicImportVarsOptions: { warnOnError: true, exclude: [ /node_modules/ ] },
+    write: true,
+    emptyOutDir: false,
+    copyPublicDir: true,
+    license: false,
+    manifest: false,
+    lib: false,
+    ssrManifest: false,
+    ssrEmitAssets: false,
+    reportCompressedSize: true,
+    chunkSizeWarningLimit: 500,
+    watch: null,
+    cssCodeSplit: true,
+    minify: 'esbuild',
+    ssr: false,
+    emitAssets: false,
+    createEnvironment: [Function: createEnvironment],
+    cssTarget: [ 'chrome107', 'edge107', 'firefox104', 'safari16' ],
+    cssMinify: true
+  },
+  environments: {
+    client: {
+      define: { 'process.env.NODE_ENV': 'process.env.NODE_ENV' },
+      resolve: {
+        externalConditions: [ 'node', 'module-sync' ],
+        extensions: [
+          '.mjs',  '.js',
+          '.mts',  '.ts',
+          '.jsx',  '.tsx',
+          '.json'
+        ],
+        dedupe: [],
+        noExternal: [],
+        external: [],
+        preserveSymlinks: false,
+        alias: [
+          {
+            find: /^\/?@vite\/env/,
+            replacement: '/@fs/C:/Users/dhamp/Facebook Listing Tool PBC&OMG/node_modules/vite/dist/client/env.mjs'
+          },
+          {
+            find: /^\/?@vite\/client/,
+            replacement: '/@fs/C:/Users/dhamp/Facebook Listing Tool PBC&OMG/node_modules/vite/dist/client/client.mjs'
+          }
+        ],
+        mainFields: [],
+        conditions: [ 'node', 'development|production' ],
+        builtins: []
+      },
+      keepProcessEnv: false,
+      consumer: 'client',
+      optimizeDeps: {
+        include: [],
+        exclude: [],
+        needsInterop: [],
+        extensions: [],
+        disabled: undefined,
+        holdUntilCrawlEnd: true,
+        force: false,
+        ignoreOutdatedRequests: false,
+        noDiscovery: true,
+        esbuildOptions: { preserveSymlinks: false },
+        entries: []
+      },
+      dev: {
+        warmup: [],
+        sourcemap: { js: true },
+        sourcemapIgnoreList: [Function: isInNodeModules],
+        preTransformRequests: false,
+        createEnvironment: [Function: defaultCreateClientDevEnvironment],
+        recoverable: true,
+        moduleRunnerTransform: false
+      },
+      build: {
+        target: [ 'chrome107', 'edge107', 'firefox104', 'safari16' ],
+        polyfillModulePreload: true,
+        modulePreload: { polyfill: true },
+        outDir: 'dummy-non-existing-folder',
+        assetsDir: 'assets',
+        assetsInlineLimit: 4096,
+        sourcemap: false,
+        terserOptions: {},
+        rollupOptions: {},
+        commonjsOptions: { include: [ /node_modules/ ], extensions: [ '.js', '.cjs' ] },
+        dynamicImportVarsOptions: { warnOnError: true, exclude: [ /node_modules/ ] },
+        write: true,
+        emptyOutDir: false,
+        copyPublicDir: true,
+        license: false,
+        manifest: false,
+        lib: false,
+        ssrManifest: false,
+        ssrEmitAssets: false,
+        reportCompressedSize: true,
+        chunkSizeWarningLimit: 500,
+        watch: null,
+        cssCodeSplit: true,
+        minify: 'esbuild',
+        ssr: false,
+        emitAssets: true,
+        createEnvironment: [Function: createEnvironment],
+        cssTarget: [ 'chrome107', 'edge107', 'firefox104', 'safari16' ],
+        cssMinify: true
+      },
+      plugins: [
+        {
+          name: 'vite:watch-package-data',
+          buildStart: [Function: buildStart],
+          buildEnd: [Function: buildEnd],
+          watchChange: [Function: watchChange]
+        },
+        {
+          name: 'alias',
+          buildStart: [AsyncFunction: buildStart],
+          resolveId: [Function: resolveId]
+        },
+        {
+          name: 'vitest',
+          enforce: 'pre',
+          options: [Function: options],
+          config: [AsyncFunction: config],
+          configResolved: [AsyncFunction: configResolved],
+          configureServer: { order: 'post', handler: [AsyncFunction: handler] }
+        },
+        {
+          name: 'vitest:ssr-replacer',
+          enforce: 'pre',
+          transform: [Function: transform]
+        },
+        {
+          name: 'vitest:css-disable',
+          enforce: 'pre',
+          transform: [Function: transform]
+        },
+        {
+          name: 'vitest:resolve-core',
+          enforce: 'pre',
+          resolveId: [AsyncFunction: resolveId]
+        },
+        {
+          name: 'vite:modulepreload-polyfill',
+          resolveId: {
+            filter: { id: /^vite\/modulepreload\-polyfill$/ },
+            handler: [Function: handler]
+          },
+          load: {
+            filter: { id: /^ vite\/modulepreload\-polyfill\.js$/ },
+            handler: [Function: handler]
+          }
+        },
+        {
+          name: 'vite:resolve',
+          resolveId: {
+            filter: { id: { exclude: /^(?:\0|\/?virtual:)/ } },
+            handler: [AsyncFunction: handler]
+          },
+          load: {
+            filter: {
+              id: [
+                /^__vite\-browser\-external/,
+                /^__vite\-optional\-peer\-dep/
+              ]
+            },
+            handler: [Function: handler]
+          }
+        },
+        {
+          name: 'vite:html-inline-proxy',
+          resolveId: {
+            filter: { id: /[?&]html-proxy\b/ },
+            handler: [Function: handler]
+          },
+          load: {
+            filter: { id: /[?&]html-proxy\b/ },
+            handler: [Function: handler]
+          }
+        },
+        {
+          name: 'vite:css',
+          buildStart: [Function: buildStart],
+          buildEnd: [Function: buildEnd],
+          load: {
+            filter: {
+              id: /\.(css|less|sass|scss|styl|stylus|pcss|postcss|sss)(?:$|\?)/
+            },
+            handler: [AsyncFunction: handler]
+          },
+          transform: {
+            filter: {
+              id: {
+                include: /\.(css|less|sass|scss|styl|stylus|pcss|postcss|sss)(?:$|\?)/,
+                exclude: [
+                  /[?&]commonjs-proxy/,
+                  /[?&](?:worker|sharedworker|raw|url)\b/
+                ]
+              }
+            },
+            handler: [AsyncFunction: handler]
+          }
+        },
+        {
+          name: 'vite:esbuild',
+          configureServer: [Function: configureServer],
+          transform: [AsyncFunction: transform]
+        },
+        {
+          name: 'vite:json',
+          transform: {
+            filter: {
+              id: {
+                include: /\.json(?:$|\?)(?!commonjs-(?:proxy|external))/,
+                exclude: /[?&](?:worker|sharedworker|raw|url)\b/
+              }
+            },
+            handler: [Function: handler]
+          }
+        },
+        {
+          name: 'vite:wasm-helper',
+          resolveId: {
+            filter: { id: /^ vite\/wasm\-helper\.js$/ },
+            handler: [Function: handler]
+          },
+          load: {
+            filter: {
+              id: [
+                /^ vite\/wasm\-helper\.js$/,
+                /(?<![?#].*)\.wasm\?init/
+              ]
+            },
+            handler: [AsyncFunction: handler]
+          }
+        },
+        {
+          name: 'vite:worker',
+          buildStart: [Function: buildStart],
+          load: {
+            filter: { id: /(?:\?|&)(worker|sharedworker)(?:&|$)/ },
+            handler: [AsyncFunction: handler]
+          },
+          transform: {
+            filter: { id: /(?:\?|&)worker_file&type=(\w+)(?:&|$)/ },
+            handler: [AsyncFunction: handler]
+          },
+          renderChunk: [Function: renderChunk],
+          generateBundle: [Function: generateBundle],
+          watchChange: [Function: watchChange]
+        },
+        {
+          name: 'vite:asset',
+          perEnvironmentStartEndDuringDev: true,
+          buildStart: [Function: buildStart],
+          resolveId: { handler: [Function: handler] },
+          load: {
+            filter: { id: { exclude: /^\0/ } },
+            handler: [AsyncFunction: handler]
+          },
+          renderChunk: [Function: renderChunk],
+          generateBundle: [Function: generateBundle]
+        },
+        {
+          name: 'vitest:coverage-transform',
+          transform: [Function: transform]
+        },
+        {
+          name: 'vitest:normalize-optimizer',
+          config: { order: 'post', handler: [Function: handler] }
+        },
+        {
+          name: 'vite:wasm-fallback',
+          load: { filter: { id: /\.wasm$/ }, handler: [Function: handler] }
+        },
+        {
+          name: 'vite:define',
+          transform: { handler: [AsyncFunction: handler] }
+        },
+        {
+          name: 'vite:css-post',
+          renderStart: [Function: renderStart],
+          transform: {
+            filter: {
+              id: {
+                include: /\.(css|less|sass|scss|styl|stylus|pcss|postcss|sss)(?:$|\?)/,
+                exclude: [
+                  /[?&]commonjs-proxy/,
+                  /[?&](?:worker|sharedworker|raw|url)\b/
+                ]
+              }
+            },
+            handler: [AsyncFunction: handler]
+          },
+          renderChunk: [AsyncFunction: renderChunk],
+          augmentChunkHash: [Function: augmentChunkHash],
+          generateBundle: [AsyncFunction: generateBundle]
+        },
+        {
+          name: 'vite:worker-import-meta-url',
+          applyToEnvironment: [Function: applyToEnvironment],
+          transform: {
+            filter: {
+              code: /new\s+(?:Worker|SharedWorker)\s*\(\s*new\s+URL.+?import\.meta\.url/s
+            },
+            handler: [AsyncFunction: handler]
+          }
+        },
+        {
+          name: 'vite:asset-import-meta-url',
+          applyToEnvironment: [Function: applyToEnvironment],
+          transform: {
+            filter: {
+              id: {
+                exclude: [
+                  /^ vite\/preload\-helper\.js$/,
+                  /^C:\\Users\\dhamp\\Facebook Listing Tool PBC&OMG\\node_modules\\vite\\dist\\client\\client\.mjs$/
+                ]
+              },
+              code: /new\s+URL.+import\.meta\.url/s
+            },
+            handler: [AsyncFunction: handler]
+          }
+        },
+        {
+          name: 'vite:dynamic-import-vars',
+          resolveId: {
+            filter: { id: /^ vite\/dynamic\-import\-helper\.js$/ },
+            handler: [Function: handler]
+          },
+          load: {
+            filter: { id: /^ vite\/dynamic\-import\-helper\.js$/ },
+            handler: [Function: handler]
+          },
+          transform: {
+            filter: {
+              id: {
+                exclude: /^C:\\Users\\dhamp\\Facebook Listing Tool PBC&OMG\\node_modules\\vite\\dist\\client\\client\.mjs$/
+              },
+              code: /\bimport\s*[(/]/
+            },
+            handler: [AsyncFunction: handler]
+          }
+        },
+        {
+          name: 'vite:import-glob',
+          buildStart: [Function: buildStart],
+          transform: {
+            filter: { code: 'import.meta.glob' },
+            handler: [AsyncFunction: handler]
+          },
+          hotUpdate: [Function: hotUpdate]
+        },
+        {
+          name: 'vitest:css-empty-post',
+          enforce: 'post',
+          transform: [Function: transform]
+        },
+        {
+          name: 'vitest:mocks',
+          enforce: 'post',
+          transform: [Function: transform]
+        },
+        {
+          name: 'vitest:automock',
+          enforce: 'post',
+          transform: [Function: transform]
+        },
+        {
+          name: 'vitest:normalize-url',
+          enforce: 'post',
+          transform: [Function: transform]
+        },
+        {
+          name: 'vite:client-inject',
+          buildStart: [AsyncFunction: buildStart],
+          transform: [AsyncFunction: transform]
+        },
+        {
+          name: 'vite:css-analysis',
+          transform: {
+            filter: {
+              id: {
+                include: /\.(css|less|sass|scss|styl|stylus|pcss|postcss|sss)(?:$|\?)/,
+                exclude: [
+                  /[?&]commonjs-proxy/,
+                  /[?&](?:worker|sharedworker|raw|url)\b/
+                ]
+              }
+            },
+            handler: [AsyncFunction: handler]
+          }
+        },
+        {
+          name: 'vite:import-analysis',
+          transform: [AsyncFunction: transform]
+        }
+      ]
+    },
+    ssr: {
+      define: { 'process.env.NODE_ENV': 'process.env.NODE_ENV' },
+      resolve: {
+        externalConditions: [ 'node', 'module-sync' ],
+        extensions: [
+          '.mjs',  '.js',
+          '.mts',  '.ts',
+          '.jsx',  '.tsx',
+          '.json'
+        ],
+        dedupe: [],
+        noExternal: [],
+        external: [],
+        preserveSymlinks: false,
+        alias: [
+          {
+            find: /^\/?@vite\/env/,
+            replacement: '/@fs/C:/Users/dhamp/Facebook Listing Tool PBC&OMG/node_modules/vite/dist/client/env.mjs'
+          },
+          {
+            find: /^\/?@vite\/client/,
+            replacement: '/@fs/C:/Users/dhamp/Facebook Listing Tool PBC&OMG/node_modules/vite/dist/client/client.mjs'
+          }
+        ],
+        mainFields: [],
+        conditions: [ 'node', 'development|production' ],
+        builtins: [
+          '_http_agent',         '_http_client',        '_http_common',
+          '_http_incoming',      '_http_outgoing',      '_http_server',
+          '_stream_duplex',      '_stream_passthrough', '_stream_readable',
+          '_stream_transform',   '_stream_wrap',        '_stream_writable',
+          '_tls_common',         '_tls_wrap',           'assert',
+          'assert/strict',       'async_hooks',         'buffer',
+          'child_process',       'cluster',             'console',
+          'constants',           'crypto',              'dgram',
+          'diagnostics_channel', 'dns',                 'dns/promises',
+          'domain',              'events',              'fs',
+          'fs/promises',         'http',                'http2',
+          'https',               'inspector',           'inspector/promises',
+          'module',              'net',                 'os',
+          'path',                'path/posix',          'path/win32',
+          'perf_hooks',          'process',             'punycode',
+          'querystring',         'readline',            'readline/promises',
+          'repl',                'stream',              'stream/consumers',
+          'stream/promises',     'stream/web',          'string_decoder',
+          'sys',                 'timers',              'timers/promises',
+          'tls',                 'trace_events',        'tty',
+          'url',                 'util',                'util/types',
+          'v8',                  'vm',                  'wasi',
+          'worker_threads',      'zlib',                /^node:/,
+          /^bun:/
+        ]
+      },
+      keepProcessEnv: true,
+      consumer: 'server',
+      optimizeDeps: {
+        include: [],
+        exclude: [],
+        needsInterop: [],
+        extensions: [],
+        disabled: undefined,
+        holdUntilCrawlEnd: true,
+        force: false,
+        ignoreOutdatedRequests: false,
+        noDiscovery: true,
+        esbuildOptions: { preserveSymlinks: false },
+        entries: []
+      },
+      dev: {
+        warmup: [],
+        sourcemap: { js: true },
+        sourcemapIgnoreList: [Function: isInNodeModules],
+        preTransformRequests: false,
+        createEnvironment: [Function: defaultCreateDevEnvironment],
+        recoverable: false,
+        moduleRunnerTransform: true
+      },
+      build: {
+        target: [ 'chrome107', 'edge107', 'firefox104', 'safari16' ],
+        polyfillModulePreload: true,
+        modulePreload: { polyfill: true },
+        outDir: 'dummy-non-existing-folder',
+        assetsDir: 'assets',
+        assetsInlineLimit: 4096,
+        sourcemap: false,
+        terserOptions: {},
+        rollupOptions: {},
+        commonjsOptions: { include: [ /node_modules/ ], extensions: [ '.js', '.cjs' ] },
+        dynamicImportVarsOptions: { warnOnError: true, exclude: [ /node_modules/ ] },
+        write: true,
+        emptyOutDir: false,
+        copyPublicDir: true,
+        license: false,
+        manifest: false,
+        lib: false,
+        ssrManifest: false,
+        ssrEmitAssets: false,
+        reportCompressedSize: true,
+        chunkSizeWarningLimit: 500,
+        watch: null,
+        cssCodeSplit: true,
+        minify: false,
+        ssr: true,
+        emitAssets: false,
+        createEnvironment: [Function: createEnvironment],
+        cssTarget: [ 'chrome107', 'edge107', 'firefox104', 'safari16' ],
+        cssMinify: 'esbuild'
+      },
+      plugins: [
+        {
+          name: 'vite:watch-package-data',
+          buildStart: [Function: buildStart],
+          buildEnd: [Function: buildEnd],
+          watchChange: [Function: watchChange]
+        },
+        {
+          name: 'alias',
+          buildStart: [AsyncFunction: buildStart],
+          resolveId: [Function: resolveId]
+        },
+        {
+          name: 'vitest',
+          enforce: 'pre',
+          options: [Function: options],
+          config: [AsyncFunction: config],
+          configResolved: [AsyncFunction: configResolved],
+          configureServer: { order: 'post', handler: [AsyncFunction: handler] }
+        },
+        {
+          name: 'vitest:ssr-replacer',
+          enforce: 'pre',
+          transform: [Function: transform]
+        },
+        {
+          name: 'vitest:css-disable',
+          enforce: 'pre',
+          transform: [Function: transform]
+        },
+        {
+          name: 'vitest:resolve-core',
+          enforce: 'pre',
+          resolveId: [AsyncFunction: resolveId]
+        },
+        {
+          name: 'vite:modulepreload-polyfill',
+          resolveId: {
+            filter: { id: /^vite\/modulepreload\-polyfill$/ },
+            handler: [Function: handler]
+          },
+          load: {
+            filter: { id: /^ vite\/modulepreload\-polyfill\.js$/ },
+            handler: [Function: handler]
+          }
+        },
+        {
+          name: 'vite:resolve',
+          resolveId: {
+            filter: { id: { exclude: /^(?:\0|\/?virtual:)/ } },
+            handler: [AsyncFunction: handler]
+          },
+          load: {
+            filter: {
+              id: [
+                /^__vite\-browser\-external/,
+                /^__vite\-optional\-peer\-dep/
+              ]
+            },
+            handler: [Function: handler]
+          }
+        },
+        {
+          name: 'vite:html-inline-proxy',
+          resolveId: {
+            filter: { id: /[?&]html-proxy\b/ },
+            handler: [Function: handler]
+          },
+          load: {
+            filter: { id: /[?&]html-proxy\b/ },
+            handler: [Function: handler]
+          }
+        },
+        {
+          name: 'vite:css',
+          buildStart: [Function: buildStart],
+          buildEnd: [Function: buildEnd],
+          load: {
+            filter: {
+              id: /\.(css|less|sass|scss|styl|stylus|pcss|postcss|sss)(?:$|\?)/
+            },
+            handler: [AsyncFunction: handler]
+          },
+          transform: {
+            filter: {
+              id: {
+                include: /\.(css|less|sass|scss|styl|stylus|pcss|postcss|sss)(?:$|\?)/,
+                exclude: [
+                  /[?&]commonjs-proxy/,
+                  /[?&](?:worker|sharedworker|raw|url)\b/
+                ]
+              }
+            },
+            handler: [AsyncFunction: handler]
+          }
+        },
+        {
+          name: 'vite:esbuild',
+          configureServer: [Function: configureServer],
+          transform: [AsyncFunction: transform]
+        },
+        {
+          name: 'vite:json',
+          transform: {
+            filter: {
+              id: {
+                include: /\.json(?:$|\?)(?!commonjs-(?:proxy|external))/,
+                exclude: /[?&](?:worker|sharedworker|raw|url)\b/
+              }
+            },
+            handler: [Function: handler]
+          }
+        },
+        {
+          name: 'vite:wasm-helper',
+          resolveId: {
+            filter: { id: /^ vite\/wasm\-helper\.js$/ },
+            handler: [Function: handler]
+          },
+          load: {
+            filter: {
+              id: [
+                /^ vite\/wasm\-helper\.js$/,
+                /(?<![?#].*)\.wasm\?init/
+              ]
+            },
+            handler: [AsyncFunction: handler]
+          }
+        },
+        {
+          name: 'vite:worker',
+          buildStart: [Function: buildStart],
+          load: {
+            filter: { id: /(?:\?|&)(worker|sharedworker)(?:&|$)/ },
+            handler: [AsyncFunction: handler]
+          },
+          transform: {
+            filter: { id: /(?:\?|&)worker_file&type=(\w+)(?:&|$)/ },
+            handler: [AsyncFunction: handler]
+          },
+          renderChunk: [Function: renderChunk],
+          generateBundle: [Function: generateBundle],
+          watchChange: [Function: watchChange]
+        },
+        {
+          name: 'vite:asset',
+          perEnvironmentStartEndDuringDev: true,
+          buildStart: [Function: buildStart],
+          resolveId: { handler: [Function: handler] },
+          load: {
+            filter: { id: { exclude: /^\0/ } },
+            handler: [AsyncFunction: handler]
+          },
+          renderChunk: [Function: renderChunk],
+          generateBundle: [Function: generateBundle]
+        },
+        {
+          name: 'vitest:coverage-transform',
+          transform: [Function: transform]
+        },
+        {
+          name: 'vitest:normalize-optimizer',
+          config: { order: 'post', handler: [Function: handler] }
+        },
+        {
+          name: 'vite:wasm-fallback',
+          load: { filter: { id: /\.wasm$/ }, handler: [Function: handler] }
+        },
+        {
+          name: 'vite:define',
+          transform: { handler: [AsyncFunction: handler] }
+        },
+        {
+          name: 'vite:css-post',
+          renderStart: [Function: renderStart],
+          transform: {
+            filter: {
+              id: {
+                include: /\.(css|less|sass|scss|styl|stylus|pcss|postcss|sss)(?:$|\?)/,
+                exclude: [
+                  /[?&]commonjs-proxy/,
+                  /[?&](?:worker|sharedworker|raw|url)\b/
+                ]
+              }
+            },
+            handler: [AsyncFunction: handler]
+          },
+          renderChunk: [AsyncFunction: renderChunk],
+          augmentChunkHash: [Function: augmentChunkHash],
+          generateBundle: [AsyncFunction: generateBundle]
+        },
+        {
+          name: 'vite:dynamic-import-vars',
+          resolveId: {
+            filter: { id: /^ vite\/dynamic\-import\-helper\.js$/ },
+            handler: [Function: handler]
+          },
+          load: {
+            filter: { id: /^ vite\/dynamic\-import\-helper\.js$/ },
+            handler: [Function: handler]
+          },
+          transform: {
+            filter: {
+              id: {
+                exclude: /^C:\\Users\\dhamp\\Facebook Listing Tool PBC&OMG\\node_modules\\vite\\dist\\client\\client\.mjs$/
+              },
+              code: /\bimport\s*[(/]/
+            },
+            handler: [AsyncFunction: handler]
+          }
+        },
+        {
+          name: 'vite:import-glob',
+          buildStart: [Function: buildStart],
+          transform: {
+            filter: { code: 'import.meta.glob' },
+            handler: [AsyncFunction: handler]
+          },
+          hotUpdate: [Function: hotUpdate]
+        },
+        {
+          name: 'vitest:css-empty-post',
+          enforce: 'post',
+          transform: [Function: transform]
+        },
+        {
+          name: 'vitest:mocks',
+          enforce: 'post',
+          transform: [Function: transform]
+        },
+        {
+          name: 'vitest:automock',
+          enforce: 'post',
+          transform: [Function: transform]
+        },
+        {
+          name: 'vitest:normalize-url',
+          enforce: 'post',
+          transform: [Function: transform]
+        },
+        {
+          name: 'vite:client-inject',
+          buildStart: [AsyncFunction: buildStart],
+          transform: [AsyncFunction: transform]
+        },
+        {
+          name: 'vite:css-analysis',
+          transform: {
+            filter: {
+              id: {
+                include: /\.(css|less|sass|scss|styl|stylus|pcss|postcss|sss)(?:$|\?)/,
+                exclude: [
+                  /[?&]commonjs-proxy/,
+                  /[?&](?:worker|sharedworker|raw|url)\b/
+                ]
+              }
+            },
+            handler: [AsyncFunction: handler]
+          }
+        },
+        {
+          name: 'vite:import-analysis',
+          transform: [AsyncFunction: transform]
+        }
+      ]
+    }
+  },
+  customLogger: {
+    hasWarned: false,
+    info: [Function: info],
+    warn: [Function: warn],
+    warnOnce: [Function: warnOnce],
+    error: [Function: error],
+    clearScreen: [Function: clearScreen],
+    hasErrorLogged: [Function: hasErrorLogged]
+  },
+  ssr: {
+    target: 'node',
+    optimizeDeps: {
+      esbuildOptions: { preserveSymlinks: false },
+      include: [],
+      exclude: [],
+      needsInterop: [],
+      extensions: [],
+      holdUntilCrawlEnd: true,
+      force: false,
+      ignoreOutdatedRequests: false,
+      noDiscovery: true,
+      entries: []
+    },
+    noExternal: [],
+    external: [],
+    resolve: {
+      conditions: [ 'node', 'development|production' ],
+      externalConditions: [ 'node', 'module-sync' ]
+    }
+  },
+  css: {
+    transformer: 'postcss',
+    preprocessorMaxWorkers: true,
+    devSourcemap: false,
+    modules: { generateScopedName: [Function (anonymous)] }
+  },
+  cacheDir: 'C:/Users/dhamp/Facebook Listing Tool PBC&OMG/node_modules/.vite/vitest/da39a3ee5e6b4b0d3255bfef95601890afd80709',
+  optimizeDeps: {
+    include: [],
+    exclude: [],
+    needsInterop: [],
+    extensions: [],
+    disabled: undefined,
+    holdUntilCrawlEnd: true,
+    force: false,
+    ignoreOutdatedRequests: false,
+    noDiscovery: true,
+    esbuildOptions: { preserveSymlinks: false },
+    entries: []
+  },
+  configFileDependencies: [ 'C:/Users/dhamp/Facebook Listing Tool PBC&OMG/vitest.config.js' ],
+  inlineConfig: {
+    configFile: 'C:\\Users\\dhamp\\Facebook Listing Tool PBC&OMG\\vitest.config.js',
+    configLoader: undefined,
+    mode: 'test',
+    plugins: [
+      {
+        name: 'vitest',
+        enforce: 'pre',
+        options: [Function: options],
+        config: [AsyncFunction: config],
+        configResolved: [AsyncFunction: configResolved],
+        configureServer: { order: 'post', handler: [AsyncFunction: handler] }
+      },
+      {
+        name: 'vitest:ssr-replacer',
+        enforce: 'pre',
+        transform: [Function: transform]
+      },
+      {
+        name: 'vitest:css-disable',
+        enforce: 'pre',
+        transform: [Function: transform]
+      },
+      {
+        name: 'vitest:css-empty-post',
+        enforce: 'post',
+        transform: [Function: transform]
+      },
+      {
+        name: 'vitest:coverage-transform',
+        transform: [Function: transform]
+      },
+      {
+        name: 'vitest:resolve-core',
+        enforce: 'pre',
+        resolveId: [AsyncFunction: resolveId]
+      },
+      {
+        name: 'vitest:mocks',
+        enforce: 'post',
+        transform: [Function: transform]
+      },
+      {
+        name: 'vitest:automock',
+        enforce: 'post',
+        transform: [Function: transform]
+      },
+      {
+        name: 'vitest:normalize-optimizer',
+        config: { order: 'post', handler: [Function: handler] }
+      },
+      {
+        name: 'vitest:normalize-url',
+        enforce: 'post',
+        transform: [Function: transform]
+      }
+    ]
+  },
+  root: 'C:/Users/dhamp/Facebook Listing Tool PBC&OMG',
+  base: '/',
+  decodedBase: '/',
+  rawBase: '/',
+  publicDir: 'C:/Users/dhamp/Facebook Listing Tool PBC&OMG/public',
+  command: 'serve',
+  isWorker: false,
+  mainConfig: null,
+  bundleChain: [],
+  isProduction: false,
+  json: { namedExports: true, stringify: 'auto' },
+  builder: undefined,
+  preview: {
+    port: 4173,
+    strictPort: false,
+    host: undefined,
+    allowedHosts: [],
+    https: undefined,
+    open: false,
+    proxy: undefined,
+    cors: {
+      origin: /^https?:\/\/(?:(?:[^:]+\.)?localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/
+    },
+    headers: {}
+  },
+  envDir: 'C:/Users/dhamp/Facebook Listing Tool PBC&OMG',
+  env: { BASE_URL: '/', MODE: 'test', DEV: true, PROD: false },
+  assetsInclude: [Function: assetsInclude],
+  logger: {
+    hasWarned: false,
+    info: [Function: info],
+    warn: [Function: warn],
+    warnOnce: [Function: warnOnce],
+    error: [Function: error],
+    clearScreen: [Function: clearScreen],
+    hasErrorLogged: [Function: hasErrorLogged]
+  },
+  packageCache: Map(1) {
+    'fnpd_C:/Users/dhamp/Facebook Listing Tool PBC&OMG' => {
+      dir: 'C:/Users/dhamp/Facebook Listing Tool PBC&OMG',
+      data: {
+        name: 'facebook-listing-tool-pbc-omg',
+        version: '1.0.0',
+        private: true,
+        description: 'Local VS Code workflow for the Facebook Listing Tool Apps Script project.',
+        scripts: {
+          login: 'node scripts/run-clasp.mjs login --no-localhost',
+          logout: 'node scripts/run-clasp.mjs logout',
+          pull: 'node scripts/run-clasp.mjs pull',
+          push: 'node scripts/run-clasp.mjs push',
+          'push:watch': 'node scripts/run-clasp.mjs push --watch',
+          open: 'node scripts/run-clasp.mjs open',
+          deploy: 'node scripts/run-clasp.mjs deploy --description VS Code deployment',
+          build: 'node scripts/build.mjs',
+          'sandbox:refresh': 'node scripts/refresh-sandbox.mjs',
+          typecheck: 'node scripts/run-tsc.mjs --noEmit',
+          test: 'node scripts/run-vitest.mjs run',
+          'test:watch': 'node scripts/run-vitest.mjs',
+          check: 'node scripts/build.mjs'
+        },
+        devDependencies: {
+          '@google/clasp': '^3.0.6-alpha',
+          '@types/google-apps-script': '^1.0.98',
+          typescript: '^5.8.3',
+          vitest: '^3.2.4'
+        }
+      },
+      hasSideEffects: [Function: hasSideEffects],
+      setResolvedCache: [Function: setResolvedCache],
+      getResolvedCache: [Function: getResolvedCache]
+    },
+    set: [Function (anonymous)]
+  },
+  worker: { format: 'iife', plugins: '() => plugins', rollupOptions: {} },
+  appType: 'spa',
+  experimental: {
+    importGlobRestoreExtension: false,
+    renderBuiltUrl: undefined,
+
+[1m[46m RUN [49m[22m [36mv3.2.4 [39m[90mC:/Users/dhamp/Facebook Listing Tool PBC&OMG[39m
+
+    hmrPartialAccept: false
+  },
+  future: undefined,
+  dev: {
+    warmup: [],
+    sourcemap: { js: true },
+    sourcemapIgnoreList: [Function: isInNodeModules],
+    preTransformRequests: false,
+    createEnvironment: [Function: defaultCreateDevEnvironment],
+    recoverable: false,
+    moduleRunnerTransform: false
+  },
+  webSocketToken: 'tqzAKxrN55yb',
+  getSortedPlugins: [Function: getSortedPlugins],
+  getSortedPluginHooks: [Function: getSortedPluginHooks],
+  createResolver: [Function: createResolver],
+  fsDenyGlob: [Function: arrayMatcher],
+  safeModulePaths: Set(0) {},
+  Symbol(vite:resolved-config): true
+}
+2026-04-14T22:50:49.026Z connect:dispatcher use / viteTimeMiddleware
+2026-04-14T22:50:49.026Z connect:dispatcher use / viteRejectInvalidRequestMiddleware
+2026-04-14T22:50:49.026Z connect:dispatcher use / corsMiddleware$2
+2026-04-14T22:50:49.027Z connect:dispatcher use / hostValidationMiddleware$1$1
+2026-04-14T22:50:49.030Z connect:dispatcher use / viteCachedTransformMiddleware
+2026-04-14T22:50:49.030Z connect:dispatcher use /__open-in-editor launchEditorMiddleware$1
+2026-04-14T22:50:49.030Z connect:dispatcher use / viteHMRPingMiddleware
+2026-04-14T22:50:49.031Z connect:dispatcher use / viteServePublicMiddleware
+2026-04-14T22:50:49.031Z connect:dispatcher use / viteTransformMiddleware
+2026-04-14T22:50:49.031Z connect:dispatcher use / viteServeRawFsMiddleware
+2026-04-14T22:50:49.031Z connect:dispatcher use / viteServeStaticMiddleware
+2026-04-14T22:50:49.031Z connect:dispatcher use / viteHtmlFallbackMiddleware
+2026-04-14T22:50:49.031Z connect:dispatcher use / viteIndexHtmlMiddleware
+2026-04-14T22:50:49.031Z connect:dispatcher use / vite404Middleware
+2026-04-14T22:50:49.031Z connect:dispatcher use / viteErrorMiddleware
+2026-04-14T22:50:49.406Z vite-node:server:request /@vite/env
+2026-04-14T22:50:49.409Z vite:resolve [32m1.66ms[39m [36m/@vite/env[39m -> [2mC:/Users/dhamp/Facebook Listing Tool 
+PBC&OMG/node_modules/vite/dist/client/env.mjs[22m
+2026-04-14T22:50:49.412Z vite:load [32m1.86ms[39m [fs] [2m/@vite/env[22m
+2026-04-14T22:50:49.417Z vite:import-analysis [32m0.94ms[39m [2m[no imports] 
+[2mnode_modules/vite/dist/client/env.mjs[22m[2m[22m
+2026-04-14T22:50:49.418Z vite:transform [32m5.35ms[39m [2m/@vite/env[22m
+2026-04-14T22:50:49.424Z vite-node:client:execute C:\@vite\env
+2026-04-14T22:50:49.424Z vite-node:client:execute C:\@vite\env
+2026-04-14T22:50:49.443Z vite:resolve [33m11.61ms[39m [36mC:\Users\dhamp\Facebook Listing Tool 
+PBC&OMG\node_modules\vitest\dist\spy.js[39m -> [2mC:/Users/dhamp/Facebook Listing Tool 
+PBC&OMG/node_modules/vitest/dist/spy.js[22m
+2026-04-14T22:50:49.439Z vite-node:client:native 
+file:///C:/Users/dhamp/Facebook%20Listing%20Tool%20PBC&OMG/node_modules/vitest/dist/spy.js
+2026-04-14T22:50:49.440Z vite-node:client:native 
+file:///C:/Users/dhamp/Facebook%20Listing%20Tool%20PBC&OMG/node_modules/vitest/dist/spy.js
+2026-04-14T22:50:49.447Z vite-node:client:native 
+file:///C:/Users/dhamp/Facebook%20Listing%20Tool%20PBC&OMG/node_modules/vitest/dist/runners.js
+2026-04-14T22:50:49.448Z vite-node:client:native 
+file:///C:/Users/dhamp/Facebook%20Listing%20Tool%20PBC&OMG/node_modules/vitest/dist/runners.js
+2026-04-14T22:50:49.458Z vite-node:server:request C:/Users/dhamp/Facebook Listing Tool PBC&OMG/tests/code.sandbox.test.js
+2026-04-14T22:50:49.460Z vite-node:server:request C:/Users/dhamp/Facebook Listing Tool PBC&OMG/tests/smoke.test.js
+2026-04-14T22:50:49.461Z vite:load [32m1.43ms[39m [fs] [2mtests/code.sandbox.test.js[22m
+2026-04-14T22:50:49.464Z vite:resolve [32m0.21ms[39m [36m./support/load-apps-script.js[39m -> [2mC:/Users/dhamp/Facebook 
+Listing Tool PBC&OMG/tests/support/load-apps-script.js[22m
+2026-04-14T22:50:49.465Z vite:import-analysis [32m3.70ms[39m [2m[1 imports rewritten] 
+[2mtests/code.sandbox.test.js[22m[2m[22m
+2026-04-14T22:50:49.465Z vite:transform [32m4.13ms[39m [2mtests/code.sandbox.test.js[22m
+2026-04-14T22:50:49.465Z vite:load [32m4.66ms[39m [fs] [2mtests/smoke.test.js[22m
+2026-04-14T22:50:49.465Z vite:import-analysis [32m0.10ms[39m [2m[0 imports rewritten] [2mtests/smoke.test.js[22m[2m[22m
+2026-04-14T22:50:49.465Z vite:transform [32m0.23ms[39m[2m [skipped] [2mtests/smoke.test.js[22m[2m[22m
+2026-04-14T22:50:49.465Z vite-node:client:execute C:\Users\dhamp\Facebook Listing Tool PBC&OMG\tests\code.sandbox.test.js
+2026-04-14T22:50:49.465Z vite-node:client:execute C:\Users\dhamp\Facebook Listing Tool PBC&OMG\tests\smoke.test.js
+2026-04-14T22:50:49.470Z vite:resolve [32m0.09ms[39m [36mvitest[39m -> [2mC:/Users/dhamp/Facebook Listing Tool 
+PBC&OMG/node_modules/vitest/dist/index.js[22m
+2026-04-14T22:50:49.466Z vite-node:client:native 
+file:///C:/Users/dhamp/Facebook%20Listing%20Tool%20PBC&OMG/node_modules/vitest/dist/index.js
+2026-04-14T22:50:49.466Z vite-node:client:native 
+file:///C:/Users/dhamp/Facebook%20Listing%20Tool%20PBC&OMG/node_modules/vitest/dist/index.js
+2026-04-14T22:50:49.474Z vite-node:server:request /tests/support/load-apps-script.js
+2026-04-14T22:50:49.476Z vite:load [32m1.36ms[39m [fs] [2m/tests/support/load-apps-script.js[22m
+2026-04-14T22:50:49.477Z vite:import-analysis [32m0.37ms[39m [2m[0 imports rewritten] 
+[2mtests/support/load-apps-script.js[22m[2m[22m
+2026-04-14T22:50:49.477Z vite:transform [32m0.58ms[39m[2m [skipped] [2m/tests/support/load-apps-script.js[22m[2m[22m
+ [32mΓ£ô[39m tests/smoke.test.js [2m([22m[2m1 test[22m[2m)[22m[32m 2[2mms[22m[39m
+2026-04-14T22:50:49.477Z vite-node:client:execute C:\Users\dhamp\Facebook Listing Tool PBC&OMG\tests\support\load-apps-script.js
+2026-04-14T22:50:49.477Z vite-node:client:native fs
+2026-04-14T22:50:49.478Z vite-node:client:native path
+2026-04-14T22:50:49.479Z vite-node:client:native vm
+ [31mΓ¥»[39m tests/code.sandbox.test.js [2m([22m[2m2 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[32m 7[2mms[22m[39m
+[31m   [31m├ù[31m Apps Script sandbox harness[2m > [22mloads Code.js without editing src[39m[32m 5[2mms[22m[39m
+[31m     ΓåÆ ENOENT: no such file or directory, open 'C:\C:\Users\dhamp\Facebook%20Listing%20Tool%20PBC&OMG\src\Code.js'[39m
+[31m   [31m├ù[31m Apps Script sandbox harness[2m > [22mevaluates doGet with mocked Apps Script services[39m[32m 1[2mms[22m[39m
+[31m     ΓåÆ ENOENT: no such file or directory, open 'C:\C:\Users\dhamp\Facebook%20Listing%20Tool%20PBC&OMG\src\Code.js'[39m
+
+[31mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[39m[1m[41m Failed Tests 2 [49m[22m[31mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[39m
+
+[41m[1m FAIL [22m[49m tests/code.sandbox.test.js[2m > [22mApps Script sandbox harness[2m > [22mloads Code.js without 
+editing src
+[31m[1mError[22m: ENOENT: no such file or directory, open 
+'C:\C:\Users\dhamp\Facebook%20Listing%20Tool%20PBC&OMG\src\Code.js'[39m
+[36m [2mΓ¥»[22m loadAppsScriptFiles tests/support/load-apps-script.js:[2m60:23[22m[39m
+    [90m 58| [39m  [35mfor[39m ([35mconst[39m relativePath [35mof[39m relativePaths) {
+    [90m 59| [39m    [35mconst[39m absolutePath [33m=[39m path[33m.[39m[34mjoin[39m(projectRoot[33m,[39m 
+relativePath)[33m;[39m
+    [90m 60| [39m    [35mconst[39m source [33m=[39m fs[33m.[39m[34mreadFileSync[39m(absolutePath[33m,[39m 
+[32m'utf8'[39m)[33m;[39m
+    [90m   | [39m                      [31m^[39m
+    [90m 61| [39m    vm[33m.[39m[34mrunInContext[39m(source[33m,[39m context[33m,[39m { filename[33m:[39m 
+absolutePath })[33m;[39m
+    [90m 62| [39m  }
+[90m [2mΓ¥»[22m tests/code.sandbox.test.js:[2m6:40[22m[39m
+
+[31m[2mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[1/2]ΓÄ»[22m[39m
+
+[41m[1m FAIL [22m[49m tests/code.sandbox.test.js[2m > [22mApps Script sandbox harness[2m > [22mevaluates doGet with 
+mocked Apps Script services
+[31m[1mError[22m: ENOENT: no such file or directory, open 
+'C:\C:\Users\dhamp\Facebook%20Listing%20Tool%20PBC&OMG\src\Code.js'[39m
+[36m [2mΓ¥»[22m loadAppsScriptFiles tests/support/load-apps-script.js:[2m60:23[22m[39m
+    [90m 58| [39m  [35mfor[39m ([35mconst[39m relativePath [35mof[39m relativePaths) {
+    [90m 59| [39m    [35mconst[39m absolutePath [33m=[39m path[33m.[39m[34mjoin[39m(projectRoot[33m,[39m 
+relativePath)[33m;[39m
+    [90m 60| [39m    [35mconst[39m source [33m=[39m fs[33m.[39m[34mreadFileSync[39m(absolutePath[33m,[39m 
+[32m'utf8'[39m)[33m;[39m
+    [90m   | [39m                      [31m^[39m
+    [90m 61| [39m    vm[33m.[39m[34mrunInContext[39m(source[33m,[39m context[33m,[39m { filename[33m:[39m 
+absolutePath })[33m;[39m
+    [90m 62| [39m  }
+[90m [2mΓ¥»[22m tests/code.sandbox.test.js:[2m17:40[22m[39m
+
+[31m[2mΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»ΓÄ»[2/2]ΓÄ»[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m1 passed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[2m | [22m[1m[32m1 passed[39m[22m[90m (3)[39m
+[2m   Start at [22m 17:50:49
+[2m   Duration [22m 476ms[2m (transform 37ms, setup 0ms, collect 43ms, tests 9ms, environment 0ms, prepare 341ms)[22m
+
+
