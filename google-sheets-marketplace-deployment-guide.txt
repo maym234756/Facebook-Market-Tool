@@ -1,0 +1,524 @@
+Google Sheets Add-on Deployment Guide
+Date: 2026-04-18
+Project: Facebook Listing Tool PBC&OMG
+
+Purpose of this document
+This file explains how to turn the current Apps Script project into an installable Google Sheets add-on that users can install through Google Workspace Marketplace.
+
+Important terminology
+- The current project is an Apps Script web app.
+- A Google Workspace Marketplace listing does not package a plain Apps Script URL as a downloadable binary.
+- In Google's model, the installable form for this project is a Google Sheets add-on or Google Workspace add-on.
+- For this project, the most realistic path is a Google Sheets add-on because the app depends heavily on Google Sheets data and spreadsheet-driven workflows.
+
+Current state of this repository
+- The project is currently configured as a web app in src/appsscript.json.
+- The main browser entrypoint is doGet(e) in src/Code.js.
+- The HTML files are currently rendered as web pages, not as Sheets sidebars or dialogs launched from the Google Sheets UI.
+- Because of that, this project cannot be published to Marketplace as-is and appear as an installable Sheets extension.
+
+What the target deployment should become
+- Users open a Google Sheet.
+- Users install the add-on from Google Workspace Marketplace.
+- The add-on adds a custom menu or opens a sidebar inside Google Sheets.
+- The sidebar UI calls Apps Script server-side functions to read and write spreadsheet data.
+- The app uses Google identity and spreadsheet context rather than a public anonymous web app URL.
+
+==================================================
+1. Decide the release model before changing code
+==================================================
+
+You must decide which audience you are targeting because the deployment path changes based on that choice.
+
+Option A: Internal private add-on
+- Best if only your company or Google Workspace domain should use it.
+- Simplest publishing path.
+- Usually avoids the heaviest public verification burden.
+- Recommended if this tool is for internal dealership or operations staff.
+
+Option B: Public Marketplace add-on
+- Best if external customers or unrelated Google accounts need to install it.
+- Requires stronger product polish, OAuth review readiness, branding, privacy terms, and support readiness.
+- May require OAuth verification and possibly a security assessment depending on scopes.
+
+Recommended decision for this project
+- Start with an internal private add-on first.
+- Validate the add-on UX and security model.
+- Move to a public listing only after the install and authorization flow is stable.
+
+==================================================
+2. Understand the architectural change
+==================================================
+
+The main shift is this:
+
+Current architecture
+- Public or shared web app URL
+- doGet(e) decides which HTML page to render
+- Navigation happens through query parameters like page=index, page=listings, and similar paths
+
+Target architecture
+- Spreadsheet-bound or spreadsheet-launched add-on behavior
+- onOpen() creates menu items in Google Sheets
+- Menu items open HtmlService sidebars or dialogs
+- The sidebar becomes the main application shell
+- Server-side functions are called with google.script.run from the sidebar
+
+Practical consequence
+- You will likely keep much of the backend logic in src/Code.js.
+- You will need to replace the web app routing model with add-on entrypoints and sidebar-launch functions.
+- You may keep the HTML/CSS/JS UI concept, but it should be adapted to run inside a Sheets sidebar width and lifecycle.
+
+==================================================
+3. Prepare Google Cloud and Apps Script ownership
+==================================================
+
+Before touching the manifest, make sure the project is controlled by the correct production owner.
+
+Step 1: Confirm production ownership
+- Decide which Google account or shared engineering account owns the production Apps Script project.
+- Do not publish Marketplace assets from a personal account unless that is truly intended long term.
+
+Step 2: Link the Apps Script project to a standard Google Cloud project
+- Open the Apps Script project in the browser.
+- Open Project Settings.
+- Switch from the default Apps Script-managed cloud project to a standard Google Cloud project.
+- Either create a new Google Cloud project or link an existing one intended for this app.
+
+Step 3: Enable required APIs in Google Cloud
+- Google Apps Script API
+- Google Workspace Marketplace SDK
+- Any additional APIs the app uses directly, if later needed
+
+Step 4: Configure the OAuth consent screen
+- Set application name
+- Set support email
+- Add developer contact information
+- Add logo if you plan a polished Marketplace listing
+- Add authorized domains if required
+- Add privacy policy and terms URLs if targeting a public listing
+
+Step 5: Create a clear environment split
+- Maintain separate development and production deployments if possible.
+- Avoid testing Marketplace install flows against your only live production script.
+
+==================================================
+4. Refactor the app from web app to Sheets add-on entrypoints
+==================================================
+
+The current app uses doGet(e) as the entrypoint. A Sheets add-on should expose add-on-oriented entrypoints instead.
+
+Core add-on functions you will likely need
+- onOpen(e)
+- onInstall(e)
+- showHomeSidebar()
+- showListingsSidebar()
+- showAnalyticsSidebar()
+- showManagerSidebar()
+
+What each function should do
+- onOpen(e): Add a custom menu when a spreadsheet is opened.
+- onInstall(e): Call onOpen(e) so the menu appears immediately after install.
+- showHomeSidebar(): Open the main app sidebar, probably based on Index.html.
+- showListingsSidebar(): Open the listing workflow directly in a sidebar.
+- showAnalyticsSidebar(): Open the analytics page in a sidebar.
+- showManagerSidebar(): Open the manager page in a sidebar if authorized.
+
+Suggested code direction in src/Code.js
+- Keep business logic such as region lookup, class lookup, listing generation, analytics reads, and spreadsheet writes.
+- Add UI launch helpers that call HtmlService.createHtmlOutputFromFile(...).
+- Remove dependency on ScriptApp.getService().getUrl() for user navigation.
+- Replace URL-based page routing with sidebar-launch functions.
+
+Example migration concept
+- Current: doGet(e) renders Index, Listings, Analytics, or Manager based on URL params.
+- Target: each menu action renders one dedicated sidebar or renders a single shell that swaps views client-side.
+
+Recommended implementation path
+- Keep one primary sidebar shell first.
+- Load a single HTML app shell and switch views client-side.
+- Add separate menu items only if the user flow benefits from it.
+
+==================================================
+5. Update the Apps Script manifest for add-on behavior
+==================================================
+
+The current manifest is web-app focused. It must be rewritten for Sheets add-on behavior.
+
+What to remove or stop relying on
+- The webapp deployment block should no longer be the primary deployment target.
+- Anonymous access should not be part of an installable Sheets add-on model.
+
+What to add conceptually in src/appsscript.json
+- A sheets section for add-on behavior
+- Proper OAuth scopes
+- Add-on metadata such as logo, name, layout behavior, and homepage trigger information if required by your add-on type
+
+Manifest planning notes
+- If you build a classic editor add-on style experience for Sheets, the manifest needs Sheets add-on configuration.
+- If you build a broader Google Workspace add-on, the manifest model is different and more structured around homepage and contextual triggers.
+- For this repo, a Sheets-focused add-on is the simpler migration target.
+
+Scopes you will likely need to review carefully
+- Spreadsheet read/write scopes
+- User identity scopes if you authorize by email
+- External request scopes if the app still calls OpenAI
+
+High-risk scope note
+- If the OpenAI call remains in production, external request permissions and clear user-facing disclosure become more important.
+- Public Marketplace review becomes more demanding when the product sends sheet-derived content to external services.
+
+==================================================
+6. Redesign the UI for sidebar use inside Sheets
+==================================================
+
+Your current HTML pages were built like full browser pages. A Sheets add-on sidebar is narrower and more constrained.
+
+Files likely affected
+- src/Index.html
+- src/Listings.html
+- src/Analytics.html
+- src/Manager.html
+
+UI changes you should expect
+- Reduce layout width assumptions
+- Simplify multi-column layouts
+- Minimize large tables unless they are scrollable and readable in a sidebar
+- Keep the primary workflow very short and obvious
+- Avoid depending on full-page navigation or direct browser URL changes
+
+Recommended UI strategy
+- Use one sidebar shell and one main action flow.
+- Keep the listing generation workflow first-class.
+- Move secondary workflows such as analytics and manager tools into tabs, sections, or separate dialogs.
+
+Why this matters
+- A feature set that works in a full browser can feel cramped and fragile in a Sheets sidebar.
+- Marketplace approval is easier when the product has a clear, focused user journey.
+
+==================================================
+7. Replace public web-app navigation with Sheets-native launch flow
+==================================================
+
+You should stop thinking in terms of giving users a URL.
+
+Target user flow
+- User installs the add-on.
+- User opens a Google Sheet.
+- User clicks Extensions.
+- User launches your add-on.
+- The sidebar opens.
+- The app uses SpreadsheetApp.getActiveSpreadsheet() or the current context where appropriate.
+
+Key behavior changes to plan for
+- The app should know which spreadsheet the user is currently in.
+- The app should fail clearly if it is opened in the wrong spreadsheet or wrong workbook template.
+- The app should guide the user if required sheets or tabs are missing.
+
+Recommended validations to add
+- Validate that the active spreadsheet is supported.
+- Validate that required tabs exist.
+- Validate that the current user is allowed to use manager features.
+- Show user-facing error messages in the sidebar instead of generic exceptions.
+
+==================================================
+8. Lock down security before publishing
+==================================================
+
+This project should not be published as an installable product without tightening access controls.
+
+Current security issue to carry forward carefully
+- The current web app manifest uses anonymous access.
+- That is not appropriate for an installable internal Sheets add-on that reads and writes business data.
+
+Security steps to complete
+- Remove anonymous web app dependence.
+- Add explicit authorization checks for sensitive actions.
+- Restrict manager-only or analytics-only features where appropriate.
+- Validate the active user before save, update, clear, analytics, and manager operations.
+- Add logging for privileged operations if operationally appropriate.
+
+If using OpenAI in production
+- Decide exactly what spreadsheet data is allowed to leave Google to the external API.
+- Disclose this clearly in internal documentation and public privacy materials if public.
+- Avoid sending more data than necessary.
+- Keep API keys in Script Properties, not in client HTML.
+
+==================================================
+9. Create install-ready add-on behavior in code
+==================================================
+
+Implementation checklist for the codebase
+
+Step 1: Add add-on menu functions in src/Code.js
+- Add onOpen(e)
+- Add onInstall(e)
+- Add menu items for opening the sidebar
+
+Step 2: Add sidebar launch helpers in src/Code.js
+- Add functions that render HtmlService output for the sidebar
+- Set a clear title for the sidebar
+
+Step 3: Rework the client navigation model
+- Remove dependence on template.appUrl
+- Remove or reduce page query routing logic
+- Move to client-side state or menu-driven view switching
+
+Step 4: Update front-end script calls
+- Ensure google.script.run flows still work correctly in sidebar context
+- Add loading and failure handling for sidebar launches and server calls
+
+Step 5: Add active spreadsheet validation
+- Detect whether the current spreadsheet is one your app supports
+- Fail with a helpful message if not
+
+Step 6: Review long-running operations
+- Sidebar UX should handle loading states clearly
+- If OpenAI generation is slow, show progress and retry behavior cleanly
+
+==================================================
+10. Test locally and in Apps Script before Marketplace work
+==================================================
+
+Do not start Marketplace setup until the add-on works correctly in Sheets.
+
+Minimum technical validation checklist
+- The add-on installs without manifest errors.
+- The menu appears on spreadsheet open.
+- The sidebar opens successfully.
+- Region loading works.
+- Salespeople loading works.
+- Class loading works.
+- Listing generation works.
+- Save, update, and clear actions work from the sidebar.
+- Analytics reads still work if included.
+- Manager-only functionality is properly restricted.
+- Errors are understandable to non-technical users.
+
+Recommended test matrix
+- Test with the project owner account.
+- Test with a normal internal user.
+- Test with a user who should not access manager actions.
+- Test in a supported spreadsheet.
+- Test in an unsupported spreadsheet.
+- Test with missing required sheets.
+
+Repository-level validation that should still run
+- npm run check
+- Any local tests covering spreadsheet behavior
+- Manual Apps Script execution tests in the editor
+
+==================================================
+11. Configure the Google Workspace Marketplace listing
+==================================================
+
+Only do this after the add-on works in production-like testing.
+
+Step 1: Open the linked Google Cloud project
+- Go to the Google Cloud console for the standard cloud project linked to the Apps Script project.
+
+Step 2: Open Google Workspace Marketplace SDK
+- Enable the SDK if it is not already enabled.
+
+Step 3: Fill in listing metadata
+- App name
+- Short description
+- Detailed description
+- Category
+- Icons
+- Screenshots
+- Support contact
+- Developer website
+- Privacy policy URL
+- Terms of service URL if needed
+
+Step 4: Choose visibility
+- Private domain-only listing
+- Unlisted restricted deployment
+- Public Marketplace listing
+
+Step 5: Complete install settings
+- Define the app configuration and availability.
+- Confirm that the OAuth client and scopes are correct.
+
+Step 6: Save draft and test installation
+- Use test users first.
+- Confirm the install flow works end to end.
+
+==================================================
+12. Complete OAuth verification if required
+==================================================
+
+You may need OAuth verification depending on scopes and audience.
+
+Usually required when
+- The app is public.
+- The app uses sensitive or restricted scopes.
+- The app accesses user data broadly.
+
+Materials you should prepare
+- App logo and branding
+- Product description matching the real behavior
+- Test account instructions for reviewers
+- Video or step-by-step reviewer instructions if requested
+- Privacy policy
+- Terms of service if public
+- Clear explanation of why each scope is needed
+
+Important review risk for this project
+- If the app sends listing or spreadsheet content to OpenAI, reviewers may expect a clear explanation of external data handling.
+- The app description, consent screen, and privacy policy should all describe this consistently.
+
+==================================================
+13. Publish in stages
+==================================================
+
+Recommended rollout path
+
+Stage 1: Internal engineering/dev install
+- Confirm manifest, menu, sidebar, and basic auth model
+
+Stage 2: Internal business pilot
+- Let a small real user group test the add-on in live spreadsheets
+- Collect UX issues and permission failures
+
+Stage 3: Private domain release
+- Publish privately to your Workspace domain if applicable
+
+Stage 4: Public Marketplace listing
+- Only after security, documentation, and support processes are stable
+
+==================================================
+14. Post-publish operational checklist
+==================================================
+
+After launch, maintain these items continuously.
+
+Operational requirements
+- Monitor Apps Script executions and failures
+- Track install issues and permission issues
+- Keep OAuth consent text accurate
+- Rotate external API keys when needed
+- Keep privacy and support links current
+- Review scopes before every major release
+
+Change management recommendation
+- Treat manifest changes as release-sensitive.
+- Test every scope change before updating the listing.
+- Test every UI change in the actual Sheets sidebar, not only in a browser.
+
+==================================================
+15. Concrete file-level changes expected in this repo
+==================================================
+
+Files that will definitely need review
+- src/appsscript.json
+- src/Code.js
+- src/Index.html
+- src/Listings.html
+- src/Analytics.html
+- src/Manager.html
+
+Likely code changes by file
+
+src/appsscript.json
+- Remove reliance on webapp deployment for primary user access
+- Add Sheets add-on manifest configuration
+- Review and minimize scopes
+
+src/Code.js
+- Add onOpen(e) and onInstall(e)
+- Add sidebar/dialog launch functions
+- Remove or reduce doGet(e)-based routing importance
+- Add active spreadsheet validation
+- Add explicit authorization checks
+
+HTML files
+- Adapt layout for sidebar width
+- Remove full-page navigation assumptions
+- Ensure client scripts work cleanly inside a sidebar lifecycle
+
+Potential new files to consider
+- src/Security.gs or a similar security helper file
+- src/AddOnUi.gs for menu and sidebar launch logic
+- docs or txt files for support and operational deployment records
+
+==================================================
+16. Recommended execution order for this project
+==================================================
+
+Follow this order to reduce rework.
+
+Phase 1: Product decision
+- Confirm internal-only versus public Marketplace target
+- Confirm whether OpenAI-backed generation will remain part of the installable version
+
+Phase 2: Security baseline
+- Remove anonymous deployment dependence
+- Add user authorization checks
+- Confirm script property handling for secrets
+
+Phase 3: Add-on entrypoint conversion
+- Add onOpen(e), onInstall(e), and sidebar launch flow
+- Replace URL routing with menu/sidebar navigation
+
+Phase 4: Sidebar UX pass
+- Resize and simplify the UI for Sheets
+- Validate the main user journey end to end
+
+Phase 5: Manifest and Cloud configuration
+- Link standard cloud project
+- Update manifest
+- Configure OAuth consent
+- Configure Marketplace SDK
+
+Phase 6: Pilot release
+- Test with internal users
+- Fix install and permission issues
+
+Phase 7: Marketplace publication
+- Complete listing metadata
+- Complete verification if required
+- Publish privately or publicly
+
+==================================================
+17. Common mistakes to avoid
+==================================================
+
+- Trying to publish the current web app URL directly as a Marketplace extension
+- Keeping anonymous access enabled while handling private business data
+- Designing the interface for a full browser instead of a Sheets sidebar
+- Using a personal Google account as the permanent production owner
+- Adding too many OAuth scopes too early
+- Publishing publicly before internal install and permission testing is stable
+- Forgetting to explain external OpenAI data handling in policy documents
+- Assuming Marketplace listing creation is the same as code deployment
+
+==================================================
+18. The shortest realistic path from where you are now
+==================================================
+
+If you want the fastest correct route, do this:
+
+1. Convert the app into a Google Sheets add-on with a sidebar UI.
+2. Replace anonymous web app access with authenticated Sheets usage.
+3. Link a standard Google Cloud project.
+4. Update the manifest for a Sheets add-on.
+5. Test internally with a small user group.
+6. Publish privately to your Workspace domain first.
+7. Only then decide whether to pursue a public Marketplace listing.
+
+==================================================
+19. Final recommendation for this repo
+==================================================
+
+The correct deployment target for this project is not a downloadable app generated from the existing Apps Script URL.
+
+The correct target is an installable Google Sheets add-on built from this Apps Script project after these changes:
+- add-on entrypoints instead of web-app-first routing
+- sidebar-oriented UI
+- stronger authorization controls
+- standard Google Cloud project linkage
+- Marketplace SDK configuration
+
+If you want the lowest-risk rollout, publish it internally first as a private Google Workspace Marketplace app for your organization, then evaluate whether a public listing is worth the extra review and support overhead.
