@@ -1,5 +1,5 @@
 Apps Script Code Review and Upgrade Blueprint
-Date: 2026-04-14
+Date: 2026-04-17
 Scope reviewed:
 - src/Code.js
 - src/Index.html
@@ -30,6 +30,39 @@ The pulled project works and is already useful, but it is still built more like 
 These are the first areas to improve because they affect security, data integrity, and production reliability.
 
 The HTML pages also work, but they are currently large single-file pages with repeated styling, repeated navigation code, repeated status helpers, and repeated table rendering patterns. That is maintainable in the short term, but it will slow future work and increase the chance of accidental drift across pages.
+
+Implementation update as of 2026-04-17:
+- The spreadsheet write path has been upgraded in src/Code.js.
+- The OpenAI request path has been hardened in src/Code.js.
+- The manager-view spreadsheet lookup has been moved to shared configuration in src/Code.js.
+- The backend read path has been optimized to reduce repeated spreadsheet, sheet, and salesperson-config lookups during one execution.
+- The app was pushed successfully to the linked Apps Script project after enabling the Apps Script API for the account.
+
+What was intentionally not changed:
+- No front-end layout, workflow, control wiring, or user-visible behavior was changed.
+- The existing Google Sheets read flow was preserved.
+- Region-to-spreadsheet mapping stayed on the same spreadsheet IDs.
+- The UI still calls the same server-side entry points and receives the same data shapes.
+
+What improved immediately:
+- Save, update, and clear actions are less likely to produce partial rows or row collisions.
+- Listing writes now use one grouped row write instead of several independent cell writes.
+- OpenAI failures now produce clearer operational errors and handle malformed responses more safely.
+- Transient OpenAI failures can retry automatically once instead of failing immediately on the first 429 or 5xx response.
+- Manager view no longer depends on a duplicated hard-coded spreadsheet ID in its function body.
+- Repeated backend sheet access within one request is now lighter and more efficient.
+- Boat detail lookup now does less unnecessary full-row scanning.
+
+What remains highest priority after this pass:
+1. Deployment access and authorization controls
+2. Additional measured backend speed improvements where live testing still shows lag
+3. Front-end code deduplication and request-state consistency
+
+Validation completed:
+- Local runtime tests passed for spreadsheet reads, listing writes, analytics reads, manager view reads, and OpenAI response handling.
+- Local runtime tests passed for execution-scoped spreadsheet and salespeople-config caching.
+- The updated src/ files were pushed successfully to the linked Apps Script project.
+- The Google Sheets pull/read behavior was preserved because the read-oriented functions were not changed in ways that alter their returned data.
 
 ==================================================
 2. Current Structure Snapshot
@@ -130,6 +163,9 @@ Suggested responsibility for Security.gs:
 3.2 High: Spreadsheet writes are vulnerable to concurrent collisions and partial writes
 --------------------------------------------------
 
+Current status:
+- Implemented on 2026-04-17 in src/Code.js.
+
 Where found:
 - src/Code.js:456
 - src/Code.js:494-499
@@ -152,6 +188,24 @@ What should be changed:
 - Wrap save/update/delete operations in LockService.
 - Replace repeated cell writes with grouped range writes.
 - Where possible, batch clear operations too.
+
+What was changed:
+- Added withSheetWriteLock_() to guard write operations with LockService.
+- Added getSalespersonListingSheet_() to centralize sheet resolution for listing writes.
+- Added findFirstEmptyListingRow_() so row selection happens inside the locked section.
+- Added writeListingRow_() so the row is updated with a single grouped range write.
+- Refactored saveListing, clearSalespersonListing, and updateSalespersonListing to use those helpers.
+
+Why this is better:
+- Two users are less likely to save into the same blank row.
+- A listing row is less likely to end up partially written if execution fails mid-operation.
+- The implementation is faster and cleaner because it reduces repeated range writes.
+- Existing sheet structure and column meaning were preserved.
+
+What was intentionally preserved:
+- The same salesperson tab lookup behavior
+- The same row-selection behavior for the first blank listing slot
+- The same payload fields and UI contract
 
 Recommended code-level change locations:
 - saveListing
@@ -180,6 +234,9 @@ Suggested responsibility for ListingsService.gs:
 3.3 High: OpenAI integration is brittle and not defensive enough
 --------------------------------------------------
 
+Current status:
+- Implemented on 2026-04-17 in src/Code.js.
+
 Where found:
 - src/Code.js:249
 - src/Code.js:425-445
@@ -204,6 +261,26 @@ What should be changed:
 - Wrap JSON.parse in try/catch.
 - Log failures with enough detail for support without leaking secrets.
 - Add response-shape validation.
+
+What was changed:
+- Added OPENAI_API_URL, OPENAI_MODEL, and OPENAI_MAX_ATTEMPTS constants.
+- Moved the request/parse flow into requestGeneratedListing_().
+- Added parseGeneratedListingResponse_() to validate status codes and output shape.
+- Added parseJsonResponse_() to catch malformed JSON and log a safe preview.
+- Added extractGeneratedText_() to normalize text extraction.
+- Added shouldRetryOpenAiRequest_() so transient 429 and 5xx responses retry once.
+- Updated generateListing() to keep prompt construction in place while delegating request handling.
+
+Why this is better:
+- HTTP failures are handled explicitly before assuming a valid JSON success body.
+- Invalid JSON no longer causes an opaque low-level failure.
+- Retry behavior improves resilience for temporary API instability.
+- The code is easier to extend later if the OpenAI request logic is split into its own file.
+
+What was intentionally preserved:
+- Prompt construction and business rules for listing generation
+- The returned plain-text listing behavior
+- The existing server entry point name used by the UI
 
 Recommended code-level change locations:
 - generateListing
@@ -262,6 +339,9 @@ Recommended code-level change locations:
 4.2 Medium: Manager view is hard-coded to OMG instead of using a configuration pattern
 --------------------------------------------------
 
+Current status:
+- Partially implemented on 2026-04-17 in src/Code.js.
+
 Where found:
 - src/Code.js:721-723
 
@@ -278,6 +358,68 @@ Files that should be changed:
 What should be changed:
 - Introduce a dedicated manager-view configuration constant or mapping.
 - Optionally make the manager page explicitly region-aware.
+
+What was changed:
+- Added MANAGER_VIEW_CONFIG near the top of src/Code.js.
+- Updated getManagerViewData() to use shared configuration instead of a function-local hard-coded spreadsheet ID.
+
+What improved:
+- Spreadsheet ownership for manager view is now centralized.
+- The function is easier to maintain and less error-prone.
+
+What still remains:
+- Manager view is still effectively OMG-specific by design.
+- A future pass could make manager view region-aware if that becomes a real requirement.
+
+What was intentionally preserved:
+- The manager page behavior
+- The source spreadsheet used by manager view
+- The returned table data shape used by the UI
+
+--------------------------------------------------
+4.6 Medium: Backend read paths still contain optimization opportunities, but the lowest-risk first pass is now implemented
+--------------------------------------------------
+
+Current status:
+- First safe optimization pass implemented on 2026-04-17 in src/Code.js.
+
+Where this originally mattered:
+- src/Code.js
+	- repeated SpreadsheetApp.openById usage
+	- repeated getSheetByName usage
+	- repeated Salespeople sheet reads for related lookups
+	- full-row scanning in getBoatDetails
+
+What was inefficient:
+- The same spreadsheet could be opened multiple times during one request.
+- The same sheet could be resolved multiple times during one request.
+- Salespeople sheet data could be reread and rescanned for related operations.
+- Boat-detail lookup scanned the full detail range when a stock-number-first lookup could narrow the work.
+
+What was changed:
+- Added EXECUTION_CACHE for per-execution spreadsheet, sheet, and salesperson-config reuse.
+- Added getSheet_() to centralize and cache sheet lookup.
+- Added getSalespersonConfig_() so active salesperson names and tab mappings are built once and reused.
+- Updated getRegionSpreadsheet_() to cache spreadsheet opens by region.
+- Updated getSalespeople_() and getSalespersonTabName_() to use the shared salesperson config.
+- Updated getSalespersonListings(), getAnalyticsData(), getDataSheet_(), getSalespeopleSheet_(), getHelperSheet_(), and getManagerViewData() to use cached sheet lookup.
+- Updated getBoatDetails() to locate the stock number in the stock column first and then read only the matching row details.
+
+Why this is better:
+- Selector-heavy flows do less redundant backend work.
+- Salesperson and tab-name lookups are more efficient.
+- Boat-detail lookup is lighter on larger inventory sheets.
+- The performance gain comes from internal backend improvements, not from changing the UI or data contract.
+
+What was intentionally preserved:
+- Same Google Sheets source data
+- Same returned values and object shapes
+- Same frontend call pattern
+- Same user-visible behavior
+
+Validation completed:
+- Added runtime tests proving spreadsheet open and Salespeople sheet resolution are reused within one execution.
+- Existing read-path tests still pass after the optimization.
 
 Suggested code structure:
 

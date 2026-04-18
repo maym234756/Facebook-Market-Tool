@@ -435,6 +435,7 @@
 
     <script>
       var currentRegion = '';
+      var regionLoadToken = 0;
 
       function setStatus(message, isError) {
         var el = document.getElementById('status');
@@ -548,18 +549,57 @@
           return;
         }
 
+        var loadToken = ++regionLoadToken;
+        var pendingRequests = 2;
+        var hasError = false;
+
         setStatus('Loading region data...');
 
         google.script.run
-          .withSuccessHandler(function(data) {
-            populateSalespeople(data.salespeople || []);
-            populateClasses(data.classes || []);
-            setStatus('');
+          .withSuccessHandler(function(salespeople) {
+            if (loadToken !== regionLoadToken || hasError) {
+              return;
+            }
+
+            populateSalespeople(salespeople || []);
+            pendingRequests -= 1;
+
+            if (pendingRequests === 0) {
+              setStatus('');
+            }
           })
           .withFailureHandler(function(err) {
-            setStatus((err && err.message) ? err.message : 'Failed to load region data.', true);
+            if (loadToken !== regionLoadToken || hasError) {
+              return;
+            }
+
+            hasError = true;
+            setStatus((err && err.message) ? err.message : 'Failed to load salespeople.', true);
           })
-          .getInitialData(currentRegion);
+          .getRegionSalespeople(currentRegion);
+
+        google.script.run
+          .withSuccessHandler(function(classes) {
+            if (loadToken !== regionLoadToken || hasError) {
+              return;
+            }
+
+            populateClasses(classes || []);
+            pendingRequests -= 1;
+
+            if (pendingRequests === 0) {
+              setStatus('');
+            }
+          })
+          .withFailureHandler(function(err) {
+            if (loadToken !== regionLoadToken || hasError) {
+              return;
+            }
+
+            hasError = true;
+            setStatus((err && err.message) ? err.message : 'Failed to load classes.', true);
+          })
+          .getRegionClasses(currentRegion);
       }
 
       function loadBoats() {

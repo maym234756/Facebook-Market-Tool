@@ -12,6 +12,22 @@ const HELPER_SHEET_MAP = {
 const SALESPEOPLE_SHEET_NAME = "Salespeople";
 const ANALYTICS_SHEET_NAME = "Analytics";
 const FIRST_DATA_ROW = 3;
+const OPENAI_API_URL = "https://api.openai.com/v1/responses";
+const OPENAI_MODEL = "gpt-5-mini";
+const OPENAI_MAX_ATTEMPTS = 2;
+const MANAGER_VIEW_CONFIG = {
+  region: "OMG",
+  sheetName: "Manager View",
+  startColumn: 2,
+  numCols: 34
+};
+const LISTING_ROW_START_COLUMN = 2;
+const LISTING_ROW_WIDTH = 7;
+const EXECUTION_CACHE = {
+  spreadsheetsByRegion: {},
+  sheetsByKey: {},
+  salespersonConfigByRegion: {}
+};
 
 // Columns on helper sheets
 const COL = {
@@ -69,6 +85,14 @@ function getInitialData(region) {
   };
 }
 
+function getRegionSalespeople(region) {
+  return region ? getSalespeople_(region) : [];
+}
+
+function getRegionClasses(region) {
+  return region ? getClasses_(region) : [];
+}
+
 function getRegionSpreadsheet_(region) {
   if (!region) {
     throw new Error("No region selected.");
@@ -79,7 +103,11 @@ function getRegionSpreadsheet_(region) {
     throw new Error("Invalid region: " + region);
   }
 
-  return SpreadsheetApp.openById(id);
+  if (!EXECUTION_CACHE.spreadsheetsByRegion[region]) {
+    EXECUTION_CACHE.spreadsheetsByRegion[region] = SpreadsheetApp.openById(id);
+  }
+
+  return EXECUTION_CACHE.spreadsheetsByRegion[region];
 }
 
 function getHelperSheetName_(region) {
@@ -91,9 +119,8 @@ function getHelperSheetName_(region) {
 }
 
 function getHelperSheet_(region) {
-  const ss = getRegionSpreadsheet_(region);
   const helperSheetName = getHelperSheetName_(region);
-  const sheet = ss.getSheetByName(helperSheetName);
+  const sheet = getSheet_(region, helperSheetName);
 
   if (!sheet) {
     throw new Error("Helper sheet not found for region " + region + ": " + helperSheetName);
@@ -103,24 +130,7 @@ function getHelperSheet_(region) {
 }
 
 function getSalespeople_(region) {
-  const sheet = getSalespeopleSheet_(region);
-  const lastRow = sheet.getLastRow();
-
-  if (lastRow < 2) return [];
-
-  const values = sheet.getRange(2, 1, lastRow - 1, 3).getValues();
-
-  return values
-    .filter(function(row) {
-      return String(row[1] || '').trim().toUpperCase() === 'Y';
-    })
-    .map(function(row) {
-      return String(row[0] || '').trim();
-    })
-    .filter(Boolean)
-    .sort(function(a, b) {
-      return a.localeCompare(b);
-    });
+  return getSalespersonConfig_(region).activeSalespeople.slice();
 }
 
 function getClasses_(region) {
@@ -209,41 +219,55 @@ function getBoatDetails(region, stockNum) {
   const lastRow = sheet.getLastRow();
   if (lastRow < FIRST_DATA_ROW) return null;
 
-  const width = COL.motorInfo - COL.boatInfo + 1;
-  const values = sheet.getRange(
+  const stockValues = sheet.getRange(
     FIRST_DATA_ROW,
-    COL.boatInfo,
+    COL.stockNum,
     lastRow - FIRST_DATA_ROW + 1,
-    width
+    1
   ).getValues();
+  const normalizedStockNum = String(stockNum || "").trim();
+  let matchOffset = -1;
 
-  for (const row of values) {
-    const boatInfo = row[0];         // AK
-    const salePrice = row[2];        // AM
-    const currentStock = row[3];     // AN
-    const websiteDesc = row[4];      // AO
-    const websiteOptions = row[5];   // AP
-    const hours = row[6];            // AQ
-    const primaryClass = row[7];     // AR
-    const usedOptions = row[10];     // AU
-    const motorInfo = row[11];       // AV
-
-    if (String(currentStock || "").trim() === String(stockNum || "").trim()) {
-      return {
-        classification: String(primaryClass || ""),
-        boatInfo: String(boatInfo || ""),
-        stockNum: String(currentStock || ""),
-        price: formatPrice_(salePrice),
-        hours: hours === "" || hours == null ? "" : String(hours),
-        motorInfo: String(motorInfo || ""),
-        options: String(usedOptions || ""),
-        websiteDesc: String(websiteDesc || ""),
-        websiteOptions: String(websiteOptions || "")
-      };
+  for (let i = 0; i < stockValues.length; i++) {
+    if (String(stockValues[i][0] || "").trim() === normalizedStockNum) {
+      matchOffset = i;
+      break;
     }
   }
 
-  return null;
+  if (matchOffset === -1) {
+    return null;
+  }
+
+  const width = COL.motorInfo - COL.boatInfo + 1;
+  const row = sheet.getRange(
+    FIRST_DATA_ROW + matchOffset,
+    COL.boatInfo,
+    1,
+    width
+  ).getValues()[0];
+
+  const boatInfo = row[0];         // AK
+  const salePrice = row[2];        // AM
+  const currentStock = row[3];     // AN
+  const websiteDesc = row[4];      // AO
+  const websiteOptions = row[5];   // AP
+  const hours = row[6];            // AQ
+  const primaryClass = row[7];     // AR
+  const usedOptions = row[10];     // AU
+  const motorInfo = row[11];       // AV
+
+  return {
+    classification: String(primaryClass || ""),
+    boatInfo: String(boatInfo || ""),
+    stockNum: String(currentStock || ""),
+    price: formatPrice_(salePrice),
+    hours: hours === "" || hours == null ? "" : String(hours),
+    motorInfo: String(motorInfo || ""),
+    options: String(usedOptions || ""),
+    websiteDesc: String(websiteDesc || ""),
+    websiteOptions: String(websiteOptions || "")
+  };
 }
 
 function generateListing(region, payload) {
@@ -422,95 +446,39 @@ FINAL QUALITY BAR
 The result should feel like a strong real-world Facebook Marketplace boat post from a sharp salesperson who knows how to get attention and drive inquiries fast in the selected region.
 `;
 
-  const response = UrlFetchApp.fetch("https://api.openai.com/v1/responses", {
-    method: "post",
-    contentType: "application/json",
-    headers: {
-      Authorization: "Bearer " + apiKey
-    },
-    payload: JSON.stringify({
-      model: "gpt-5-mini",
-      input: prompt
-    }),
-    muteHttpExceptions: true
-  });
-
-  const text = response.getContentText();
-  const json = JSON.parse(text);
-
-  if (json.error) {
-    throw new Error(json.error.message);
-  }
-
-  if (json.output_text && json.output_text.trim()) {
-    return json.output_text.trim();
-  }
-
-  const fallback =
-    json.output?.[0]?.content?.[0]?.text ||
-    json.output?.map(o => (o.content || []).map(c => c.text || "").join(" ")).join(" ").trim();
-
-  return fallback || "";
+  return requestGeneratedListing_(apiKey, prompt);
 }
 
 function saveListing(region, payload) {
   if (!region) throw new Error("No region selected.");
 
-  const ss = getRegionSpreadsheet_(region);
   const salespersonName = String(payload.salespersonName || "").trim();
 
   if (!salespersonName) {
     throw new Error("Missing salesperson name.");
   }
 
-  const tabName = getSalespersonTabName_(region, salespersonName);
-  const sheet = ss.getSheetByName(tabName);
+  return withSheetWriteLock_(function() {
+    const sheet = getSalespersonListingSheet_(region, salespersonName);
+    const targetRow = findFirstEmptyListingRow_(sheet);
 
-  if (!sheet) {
-    throw new Error("Sheet not found: " + tabName);
-  }
+    writeListingRow_(sheet, targetRow, {
+      stockNum: payload.stockNum || "",
+      price: payload.price || "",
+      colE: payload.bmbBoard || "",
+      colF: payload.video || "",
+      description: payload.aiListing || "",
+      colH: payload.link || ""
+    });
 
-  const stockNum = payload.stockNum || "";
-  const price = payload.price || "";
-  const bmbBoard = payload.bmbBoard || "";
-  const video = payload.video || "";
-  const aiListing = payload.aiListing || "";
-  const link = payload.link || "";
-
-  const startRow = 2;
-  const lastRow = Math.max(sheet.getLastRow(), startRow);
-  const numRows = lastRow - startRow + 1;
-  const colBValues = sheet.getRange(startRow, 2, numRows, 1).getValues();
-
-  let targetRow = lastRow + 1;
-
-  for (let i = 0; i < colBValues.length; i++) {
-    if (!colBValues[i][0]) {
-      targetRow = startRow + i;
-      break;
-    }
-  }
-
-  sheet.getRange(targetRow, 2).setValue(stockNum);   // B
-  sheet.getRange(targetRow, 4).setValue(price);      // D
-  sheet.getRange(targetRow, 5).setValue(bmbBoard);   // E
-  sheet.getRange(targetRow, 6).setValue(video);      // F
-  sheet.getRange(targetRow, 7).setValue(aiListing);  // G
-  sheet.getRange(targetRow, 8).setValue(link);       // H
-
-  return true;
+    return true;
+  });
 }
 
 function getSalespersonListings(region, salespersonName) {
   if (!region) throw new Error("No region selected.");
 
-  const ss = getRegionSpreadsheet_(region);
-  const tabName = getSalespersonTabName_(region, salespersonName);
-  const sheet = ss.getSheetByName(tabName);
-
-  if (!sheet) {
-    throw new Error("Sheet not found: " + tabName);
-  }
+  const sheet = getSalespersonListingSheet_(region, salespersonName);
 
   const lastRow = sheet.getLastRow();
   if (lastRow < 1) {
@@ -546,58 +514,53 @@ function getSalespersonListings(region, salespersonName) {
 function clearSalespersonListing(region, salespersonName, rowNumber) {
   if (!region) throw new Error("No region selected.");
 
-  const ss = getRegionSpreadsheet_(region);
-  const tabName = getSalespersonTabName_(region, salespersonName);
-  const sheet = ss.getSheetByName(tabName);
-
-  if (!sheet) {
-    throw new Error("Sheet not found: " + tabName);
-  }
-
   if (!rowNumber || rowNumber < 2) {
     throw new Error("Invalid row number.");
   }
 
-  sheet.getRange(rowNumber, 2).clearContent(); // B
-  sheet.getRange(rowNumber, 4).clearContent(); // D
-  sheet.getRange(rowNumber, 5).clearContent(); // E
-  sheet.getRange(rowNumber, 6).clearContent(); // F
-  sheet.getRange(rowNumber, 7).clearContent(); // G
-  sheet.getRange(rowNumber, 8).clearContent(); // H
+  return withSheetWriteLock_(function() {
+    const sheet = getSalespersonListingSheet_(region, salespersonName);
 
-  return true;
+    writeListingRow_(sheet, rowNumber, {
+      stockNum: "",
+      price: "",
+      colE: "",
+      colF: "",
+      description: "",
+      colH: ""
+    });
+
+    return true;
+  });
 }
 
 function updateSalespersonListing(region, salespersonName, rowNumber, updatedValues) {
   if (!region) throw new Error("No region selected.");
 
-  const ss = getRegionSpreadsheet_(region);
-  const tabName = getSalespersonTabName_(region, salespersonName);
-  const sheet = ss.getSheetByName(tabName);
-
-  if (!sheet) {
-    throw new Error("Sheet not found: " + tabName);
-  }
-
   if (!rowNumber || rowNumber < 2) {
     throw new Error("Invalid row number.");
   }
 
-  sheet.getRange(rowNumber, 2).setValue(updatedValues.stockNum || "");     // B
-  sheet.getRange(rowNumber, 4).setValue(updatedValues.price || "");        // D
-  sheet.getRange(rowNumber, 5).setValue(updatedValues.colE || "");         // E
-  sheet.getRange(rowNumber, 6).setValue(updatedValues.colF || "");         // F
-  sheet.getRange(rowNumber, 7).setValue(updatedValues.description || "");  // G
-  sheet.getRange(rowNumber, 8).setValue(updatedValues.colH || "");         // H
+  return withSheetWriteLock_(function() {
+    const sheet = getSalespersonListingSheet_(region, salespersonName);
 
-  return true;
+    writeListingRow_(sheet, rowNumber, {
+      stockNum: updatedValues.stockNum || "",
+      price: updatedValues.price || "",
+      colE: updatedValues.colE || "",
+      colF: updatedValues.colF || "",
+      description: updatedValues.description || "",
+      colH: updatedValues.colH || ""
+    });
+
+    return true;
+  });
 }
 
 function getAnalyticsData(region, viewName) {
   if (!region) throw new Error("No region selected.");
 
-  const ss = getRegionSpreadsheet_(region);
-  const sheet = ss.getSheetByName(ANALYTICS_SHEET_NAME);
+  const sheet = getSheet_(region, ANALYTICS_SHEET_NAME);
 
   if (!sheet) {
     throw new Error("Analytics sheet not found.");
@@ -666,9 +629,157 @@ function formatPrice_(value) {
   if (value === "" || value == null || isNaN(value)) return String(value || "");
   return "$" + Number(value).toLocaleString("en-US", { maximumFractionDigits: 0 });
 }
-function getDataSheet_(region) {
+
+function requestGeneratedListing_(apiKey, prompt) {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= OPENAI_MAX_ATTEMPTS; attempt++) {
+    const response = UrlFetchApp.fetch(OPENAI_API_URL, {
+      method: "post",
+      contentType: "application/json",
+      headers: {
+        Authorization: "Bearer " + apiKey
+      },
+      payload: JSON.stringify({
+        model: OPENAI_MODEL,
+        input: prompt
+      }),
+      muteHttpExceptions: true
+    });
+
+    const statusCode = typeof response.getResponseCode === "function"
+      ? response.getResponseCode()
+      : 200;
+    const responseText = response.getContentText();
+
+    try {
+      return parseGeneratedListingResponse_(statusCode, responseText);
+    } catch (error) {
+      lastError = error;
+      if (!shouldRetryOpenAiRequest_(statusCode, attempt)) {
+        break;
+      }
+    }
+  }
+
+  throw lastError || new Error("OpenAI request failed.");
+}
+
+function parseGeneratedListingResponse_(statusCode, responseText) {
+  const json = parseJsonResponse_(responseText, "OpenAI API response was not valid JSON.");
+
+  if (statusCode >= 400) {
+    const apiMessage = json && json.error && json.error.message
+      ? json.error.message
+      : "OpenAI request failed with status " + statusCode + ".";
+    throw new Error(apiMessage);
+  }
+
+  if (json.error) {
+    throw new Error(json.error.message || "OpenAI returned an error.");
+  }
+
+  if (json.output_text && json.output_text.trim()) {
+    return json.output_text.trim();
+  }
+
+  const fallback = extractGeneratedText_(json);
+  if (fallback) {
+    return fallback;
+  }
+
+  throw new Error("OpenAI response did not include generated listing text.");
+}
+
+function parseJsonResponse_(text, fallbackMessage) {
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    console.error("Failed to parse OpenAI response", {
+      responsePreview: String(text || "").slice(0, 500)
+    });
+    throw new Error(fallbackMessage);
+  }
+}
+
+function extractGeneratedText_(json) {
+  const primary = json.output?.[0]?.content?.[0]?.text;
+  if (primary && String(primary).trim()) {
+    return String(primary).trim();
+  }
+
+  const merged = (json.output || [])
+    .map(function(item) {
+      return (item.content || [])
+        .map(function(contentItem) {
+          return contentItem.text || "";
+        })
+        .join(" ");
+    })
+    .join(" ")
+    .trim();
+
+  return merged || "";
+}
+
+function shouldRetryOpenAiRequest_(statusCode, attempt) {
+  return attempt < OPENAI_MAX_ATTEMPTS && (statusCode === 429 || statusCode >= 500);
+}
+
+function withSheetWriteLock_(callback) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  try {
+    return callback();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function getSalespersonListingSheet_(region, salespersonName) {
   const ss = getRegionSpreadsheet_(region);
-  const sheet = ss.getSheetByName("UIMT");
+  const tabName = getSalespersonTabName_(region, salespersonName);
+  const sheet = ss.getSheetByName(tabName);
+
+  if (!sheet) {
+    throw new Error("Sheet not found: " + tabName);
+  }
+
+  return sheet;
+}
+
+function findFirstEmptyListingRow_(sheet) {
+  const startRow = 2;
+  const lastRow = Math.max(sheet.getLastRow(), startRow);
+  const numRows = lastRow - startRow + 1;
+  const colBValues = sheet.getRange(startRow, 2, numRows, 1).getValues();
+
+  for (let i = 0; i < colBValues.length; i++) {
+    if (!String(colBValues[i][0] || "").trim()) {
+      return startRow + i;
+    }
+  }
+
+  return lastRow + 1;
+}
+
+function writeListingRow_(sheet, rowNumber, values) {
+  const rowRange = sheet.getRange(rowNumber, LISTING_ROW_START_COLUMN, 1, LISTING_ROW_WIDTH);
+  const currentRow = rowRange.getValues()[0];
+
+  currentRow[0] = values.stockNum || "";
+  currentRow[2] = values.price || "";
+  currentRow[3] = values.colE || "";
+  currentRow[4] = values.colF || "";
+  currentRow[5] = values.description || "";
+  currentRow[6] = values.colH || "";
+
+  rowRange.setValues([currentRow]);
+}
+
+function getDataSheet_(region) {
+  const sheet = getSheet_(region, "UIMT");
 
   if (!sheet) {
     throw new Error("UIMT sheet not found for region: " + region);
@@ -677,8 +788,7 @@ function getDataSheet_(region) {
   return sheet;
 }
 function getSalespeopleSheet_(region) {
-  const ss = getRegionSpreadsheet_(region);
-  const sheet = ss.getSheetByName(SALESPEOPLE_SHEET_NAME);
+  const sheet = getSheet_(region, SALESPEOPLE_SHEET_NAME);
 
   if (!sheet) {
     throw new Error('Salespeople sheet not found for region: ' + region);
@@ -688,40 +798,30 @@ function getSalespeopleSheet_(region) {
 }
 
 function getSalespersonTabName_(region, salespersonName) {
-  const sheet = getSalespeopleSheet_(region);
-  const lastRow = sheet.getLastRow();
+  const config = getSalespersonConfig_(region);
 
-  if (lastRow < 2) {
+  if (!config.hasRows) {
     throw new Error('No salespeople configured for region: ' + region);
   }
 
-  const values = sheet.getRange(2, 1, lastRow - 1, 3).getValues();
-
-  for (let i = 0; i < values.length; i++) {
-    const displayName = String(values[i][0] || '').trim();
-    const active = String(values[i][1] || '').trim().toUpperCase();
-    const tabName = String(values[i][2] || '').trim();
-
-    if (displayName === String(salespersonName || '').trim()) {
-      if (active !== 'Y') {
-        throw new Error('Salesperson is inactive: ' + salespersonName);
-      }
-
-      if (!tabName) {
-        throw new Error('Missing tab name for salesperson: ' + salespersonName);
-      }
-
-      return tabName;
-    }
+  const entry = config.byDisplayName[String(salespersonName || '').trim()];
+  if (!entry) {
+    throw new Error('Salesperson not found in config: ' + salespersonName);
   }
 
-  throw new Error('Salesperson not found in config: ' + salespersonName);
+  if (!entry.isActive) {
+    throw new Error('Salesperson is inactive: ' + salespersonName);
+  }
+
+  if (!entry.tabName) {
+    throw new Error('Missing tab name for salesperson: ' + salespersonName);
+  }
+
+  return entry.tabName;
 }
 
 function getManagerViewData() {
-  const omgSpreadsheetId = "13g1AXFomQ6rLbdfWogEmeIHwjzdjTjA9fuZML0P4Tcw";
-  const ss = SpreadsheetApp.openById(omgSpreadsheetId);
-  const sheet = ss.getSheetByName("Manager View");
+  const sheet = getSheet_(MANAGER_VIEW_CONFIG.region, MANAGER_VIEW_CONFIG.sheetName);
 
   if (!sheet) {
     throw new Error("Manager View sheet not found.");
@@ -738,8 +838,8 @@ function getManagerViewData() {
   }
 
   // B:AI
-  const startColumn = 2;
-  const numCols = 34;
+  const startColumn = MANAGER_VIEW_CONFIG.startColumn;
+  const numCols = MANAGER_VIEW_CONFIG.numCols;
 
   const range = sheet.getRange(1, startColumn, lastRow, numCols);
   const values = range.getDisplayValues();
@@ -777,6 +877,58 @@ function getManagerViewData() {
     columnWidths: columnWidths,
     startColumn: startColumn
   };
+}
+
+function getSheet_(region, sheetName) {
+  const cacheKey = region + "::" + sheetName;
+
+  if (!(cacheKey in EXECUTION_CACHE.sheetsByKey)) {
+    const ss = getRegionSpreadsheet_(region);
+    EXECUTION_CACHE.sheetsByKey[cacheKey] = ss.getSheetByName(sheetName) || null;
+  }
+
+  return EXECUTION_CACHE.sheetsByKey[cacheKey];
+}
+
+function getSalespersonConfig_(region) {
+  if (!EXECUTION_CACHE.salespersonConfigByRegion[region]) {
+    const sheet = getSalespeopleSheet_(region);
+    const lastRow = sheet.getLastRow();
+    const values = lastRow < 2 ? [] : sheet.getRange(2, 1, lastRow - 1, 3).getValues();
+    const byDisplayName = {};
+    const activeSalespeople = [];
+
+    for (let i = 0; i < values.length; i++) {
+      const displayName = String(values[i][0] || '').trim();
+      const isActive = String(values[i][1] || '').trim().toUpperCase() === 'Y';
+      const tabName = String(values[i][2] || '').trim();
+
+      if (!displayName) {
+        continue;
+      }
+
+      byDisplayName[displayName] = {
+        isActive: isActive,
+        tabName: tabName
+      };
+
+      if (isActive) {
+        activeSalespeople.push(displayName);
+      }
+    }
+
+    activeSalespeople.sort(function(a, b) {
+      return a.localeCompare(b);
+    });
+
+    EXECUTION_CACHE.salespersonConfigByRegion[region] = {
+      hasRows: values.length > 0,
+      byDisplayName: byDisplayName,
+      activeSalespeople: activeSalespeople
+    };
+  }
+
+  return EXECUTION_CACHE.salespersonConfigByRegion[region];
 }
 
 /*

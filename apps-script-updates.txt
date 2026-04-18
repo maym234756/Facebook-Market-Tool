@@ -1,0 +1,372 @@
+Apps Script Update Log
+Date Created: 2026-04-17
+Project: Facebook Listing Tool PBC&OMG
+
+Purpose of this file
+This document is a current-state update log for the Apps Script project.
+It explains:
+- what code changes were made
+- when each change was made
+- why the change was needed
+- what the change improves or fixes
+- what behavior was intentionally preserved
+- what the next recommended steps are
+
+==================================================
+1. Summary Of Current Update Pass
+==================================================
+
+This update pass focused on backend reliability and maintainability without changing the UI, frontend workflow, or Google Sheets read behavior.
+
+Main goals of this pass:
+1. Make spreadsheet writes safer
+2. Make OpenAI/API handling more defensive
+3. Remove one hard-coded manager-view dependency
+4. Preserve the original Google Sheets feed/read behavior
+5. Push the updated src/ files back to the linked Apps Script project
+
+Additional optimization pass completed on 2026-04-17:
+6. Reduce redundant spreadsheet, sheet, and salesperson-config lookups during one Apps Script execution
+7. Narrow boat-detail reads so stock lookup scans one column first, then reads only the matching detail row
+8. Let salespeople load independently from classes so the salesperson dropdown is not blocked by class loading
+
+What was intentionally not changed:
+- No user interface layout changes
+- No frontend control flow changes
+- No changes to how selectors are displayed or used
+- No change to Google Sheets source spreadsheet IDs for regions
+- No change to data shape returned to the frontend
+- No change to the existing read-oriented Google Sheets flow
+- No change to which Google Sheets are queried for region, salespeople, classes, boats, analytics, or manager view
+
+==================================================
+2. Completed Changes
+==================================================
+
+--------------------------------------------------
+Change 1: Spreadsheet write locking and grouped row writes
+Date implemented: 2026-04-17
+Files changed:
+- src/Code.js
+
+What was changed:
+- saveListing was refactored to acquire a script lock before selecting the target row.
+- clearSalespersonListing was refactored to use the same locked write path.
+- updateSalespersonListing was refactored to use the same locked write path.
+- Added helper functions:
+  - withSheetWriteLock_()
+  - getSalespersonListingSheet_()
+  - findFirstEmptyListingRow_()
+  - writeListingRow_()
+- Listing rows are now written as one grouped row write instead of several separate cell writes.
+
+Why this change was made:
+- The original code wrote listing data cell by cell.
+- That made the save/update/clear flow vulnerable to race conditions and partial writes.
+- If two users saved at the same time, they could target the same blank row.
+- If execution failed mid-save, one part of a listing could write while another part did not.
+
+What this fixes or improves:
+- Reduces the risk of concurrent row collisions
+- Reduces the risk of partial row writes
+- Makes the listing write path more consistent
+- Improves backend reliability under multi-user usage
+- Slightly improves performance by reducing repeated write calls
+
+What was preserved:
+- Same salesperson tab lookup behavior
+- Same columns and same sheet structure
+- Same payload fields from the frontend
+- Same frontend function names and user flow
+
+Operational result:
+- Listing save, update, and clear are now safer and cleaner without changing how users interact with the app.
+
+--------------------------------------------------
+Change 2: Defensive OpenAI request handling
+Date implemented: 2026-04-17
+Files changed:
+- src/Code.js
+
+What was changed:
+- generateListing now delegates the HTTP request/parse logic to a dedicated helper.
+- Added constants:
+  - OPENAI_API_URL
+  - OPENAI_MODEL
+  - OPENAI_MAX_ATTEMPTS
+- Added helper functions:
+  - requestGeneratedListing_()
+  - parseGeneratedListingResponse_()
+  - parseJsonResponse_()
+  - extractGeneratedText_()
+  - shouldRetryOpenAiRequest_()
+
+Why this change was made:
+- The original OpenAI path assumed the response body could always be parsed as JSON.
+- It did not validate HTTP status before treating the response like a success.
+- It did not retry transient failures.
+- It did not clearly separate request logic from prompt-building logic.
+
+What this fixes or improves:
+- Handles malformed JSON responses more safely
+- Handles HTTP error codes more explicitly
+- Retries temporary 429 and 5xx failures once
+- Produces clearer operational errors during API failures
+- Makes the code easier to maintain and split later if needed
+
+What was preserved:
+- Same generateListing entry point
+- Same prompt-building behavior
+- Same plain-text listing output goal
+- Same frontend usage of the Apps Script function
+
+Operational result:
+- AI listing generation is now more resilient and easier to troubleshoot when the external API fails or returns bad data.
+
+--------------------------------------------------
+Change 3: Manager view configuration cleanup
+Date implemented: 2026-04-17
+Files changed:
+- src/Code.js
+
+What was changed:
+- Added MANAGER_VIEW_CONFIG at the top of the file.
+- Updated getManagerViewData to use shared configuration instead of a duplicated hard-coded spreadsheet ID inside the function.
+
+Why this change was made:
+- Hard-coded IDs inside function bodies are harder to maintain.
+- Shared configuration is easier to reason about and update later.
+
+What this fixes or improves:
+- Centralizes manager-view configuration
+- Reduces duplication
+- Makes future extension easier
+- Lowers maintenance risk
+
+What was preserved:
+- Same source spreadsheet
+- Same manager-view behavior
+- Same returned table data format
+
+Operational result:
+- The manager-view backend is cleaner and easier to maintain without changing what users see.
+
+--------------------------------------------------
+Change 4: Runtime validation for spreadsheet and API behavior
+Date implemented: 2026-04-17
+Files changed:
+- tests/spreadsheet.behavior.test.js
+- tests/support/mock-spreadsheet.js
+
+What was changed:
+- Added support in the local test mocks for batched setValues writes.
+- Added lock-service mocking.
+- Added URL fetch mocking for OpenAI responses.
+- Added tests covering:
+  - listing save/update/clear behavior
+  - preservation of untouched row cells during grouped writes
+  - analytics and manager-view reads
+  - transient OpenAI failure retry handling
+  - invalid OpenAI JSON handling
+
+Why this change was made:
+- Backend changes should be validated before being pushed.
+- The local test harness needed to understand the new write and fetch behavior.
+
+What this fixes or improves:
+- Increases confidence in backend changes
+- Reduces regression risk
+- Makes future backend refactors safer
+
+What was preserved:
+- Existing read-path expectations
+- Existing sandbox loader approach
+
+Operational result:
+- The local runtime suite passed and confirmed that reads, writes, analytics, manager view, and AI handling still work as expected.
+
+--------------------------------------------------
+Change 5: Apps Script project push completed
+Date implemented: 2026-04-17
+Files affected in remote Apps Script project:
+- src/Analytics.html
+- src/appsscript.json
+- src/Code.js
+- src/Index.html
+- src/Listings.html
+- src/Manager.html
+
+What happened:
+- The project push was initially blocked because the Apps Script API was disabled for the Google account.
+- After enabling the Apps Script API, the push succeeded.
+
+Why this matters:
+- The backend changes are not only local now.
+- They were successfully pushed to the linked Apps Script project.
+
+What this fixes or improves:
+- Keeps the live Apps Script project aligned with the local src/ folder
+- Allows real-environment testing against actual Google Sheets and deployed Apps Script behavior
+
+Operational result:
+- The current backend changes are now in the linked Apps Script project.
+
+--------------------------------------------------
+Change 6: Execution-scoped backend read optimization
+Date implemented: 2026-04-17
+Files changed:
+- src/Code.js
+- tests/spreadsheet.behavior.test.js
+- tests/support/mock-spreadsheet.js
+
+What was changed:
+- Added EXECUTION_CACHE to reuse spreadsheet and sheet lookups during one Apps Script execution.
+- Added getSheet_() so common sheet resolution is cached by region and sheet name.
+- Added getSalespersonConfig_() so the Salespeople sheet is read once and reused for both dropdown data and salesperson tab lookup.
+- Updated getRegionSpreadsheet_() to cache SpreadsheetApp.openById results per region.
+- Updated getSalespeople_(), getSalespersonTabName_(), getSalespersonListings(), getAnalyticsData(), getDataSheet_(), getSalespeopleSheet_(), getHelperSheet_(), and getManagerViewData() to use the new internal caching path.
+- Updated getBoatDetails() so it checks the stock-number column first, then reads the matching detail row instead of scanning every full detail row.
+- Added local tests proving spreadsheet open and Salespeople sheet resolution are reused within one execution.
+
+Why this change was made:
+- The app was doing repeated spreadsheet opens and repeated sheet lookups inside the same request path.
+- The Salespeople sheet was being reread and rescanned for related operations that could share the same parsed config.
+- Boat detail lookup was reading and iterating the full UIMT detail block when a stock-number-first lookup could reduce work safely.
+
+What this fixes or improves:
+- Reduces redundant backend work during region load and related selector flows
+- Makes salesperson lookup and tab resolution more efficient
+- Makes boat detail lookup lighter for large UIMT sheets
+- Improves perceived responsiveness without changing what data is returned
+- Keeps the performance gains inside backend internals instead of changing the UI contract
+
+What was preserved:
+- Same Google Sheets source spreadsheets and sheet names
+- Same response shapes returned to the frontend
+- Same selector behavior and frontend flow
+- Same Google Sheets read semantics from the user's perspective
+
+Operational result:
+- The backend should feel smoother during selector-driven workflows while preserving the same user-facing behavior.
+
+--------------------------------------------------
+Change 7: Salesperson dropdown load optimization
+Date implemented: 2026-04-17
+Files changed:
+- src/Code.js
+- src/Index.html
+- src/Listings.html
+- tests/spreadsheet.behavior.test.js
+
+What was changed:
+- Added lightweight server wrappers:
+  - getRegionSalespeople(region)
+  - getRegionClasses(region)
+- Updated Index.html so salespeople and classes load in parallel instead of one combined request delaying both.
+- Updated Listings.html so region change loads only salespeople and no longer waits on unused class-loading work.
+- Added stale-response protection using request tokens so quick region changes do not let old responses overwrite the current dropdown state.
+- Added a runtime test covering the new lightweight selector endpoints.
+
+Why this change was made:
+- The salesperson dropdown was still feeling slow after region selection.
+- The main reason was that salespeople were waiting for class loading to finish in the same request cycle.
+- On the Listings page, the app was still requesting classes even though the page never uses them.
+
+What this fixes or improves:
+- Salespeople can populate sooner after region selection
+- Region-change responsiveness is better on both the Listing Generator and Listings page
+- The Listings page does less unnecessary backend work
+- Rapid region switching is safer because stale responses are ignored
+
+What was preserved:
+- Same salesperson names
+- Same class data
+- Same Google Sheets sources
+- Same UI controls and same user workflow after the dropdowns load
+- Same backend logic for how salespeople and classes are derived
+
+Operational result:
+- The salesperson dropdown should feel faster because it is no longer blocked by class-loading work.
+
+==================================================
+3. What Was Not Changed
+==================================================
+
+These areas were intentionally preserved during this pass:
+
+- Google Sheets read behavior
+  - Region lookup still uses the same spreadsheet IDs
+  - Salespeople, classes, boats, analytics, and manager-view reads still follow the same core flow
+
+- Frontend/UI behavior
+  - No visual layout changes
+  - No selector wiring changes
+  - No new buttons, panels, or workflow steps
+
+- Data contracts
+  - No intentional change to the response structure expected by the HTML pages
+  - No intentional change to which server-side entry points the UI calls
+
+This was important because the goal of this pass was backend reliability, not a front-end redesign or data-contract rewrite.
+
+==================================================
+4. What Improved Immediately
+==================================================
+
+- Listing row writes are safer under concurrent usage
+- Partial-write risk is lower
+- OpenAI/API failures are more understandable and more resilient
+- Manager-view backend configuration is cleaner
+- Local validation is stronger than before
+- The live Apps Script project now contains the updated backend changes
+- Repeated sheet access inside one execution is now lighter and more efficient
+- Salesperson dropdown-related lookups now reuse one parsed config
+- Boat detail lookup does less unnecessary full-row scanning
+
+==================================================
+5. Validation Completed
+==================================================
+
+Validation completed on 2026-04-17:
+
+- Local runtime tests passed
+- Spreadsheet read paths passed
+- Listing write paths passed
+- Analytics and manager-view reads passed
+- OpenAI retry and parse handling passed
+- Apps Script push to the linked project succeeded
+- Execution-scoped caching and read-path optimization passed focused runtime tests
+- Full runtime test suite passed after the selector-speed optimization
+
+Important validation note:
+- The separate npm run check task still has pre-existing local TypeScript/test-harness issues that are outside the Apps Script runtime behavior itself.
+- Those issues did not block the actual runtime test suite or the Apps Script push.
+
+==================================================
+6. Recommended Next Steps
+==================================================
+
+Recommended next backend steps in priority order:
+
+1. Add authorization and restricted deployment controls
+   - Restrict deployment access in appsscript.json
+   - Add server-side authorization helpers in Code.js or a dedicated Security.gs file
+
+2. Add safe backend speed improvements
+  - Expand the same low-risk optimization pattern to any remaining repeated sheet access paths
+  - Measure which page still feels slowest live before changing more code
+  - Consider short-lived caching only for low-volatility dropdown data if real testing still shows delays
+
+3. Improve frontend request-state consistency later
+   - Prevent duplicate clicks during slow responses
+   - Add stale-response protection for rapid region switching
+   - Standardize loading/disabled states across pages
+
+4. Reduce repeated frontend code later
+   - Extract shared nav, styles, and helper logic
+
+==================================================
+7. Short Plain-English Summary
+==================================================
+
+On 2026-04-17, the backend was upgraded to make listing saves safer, AI generation more reliable, manager-view configuration cleaner, and selector-related backend reads more efficient. A later pass on the same day also improved salesperson dropdown responsiveness by letting salespeople load independently from class data. These changes were made specifically to improve reliability and smoothness without changing the UI, without changing how the app reads from Google Sheets from the user's point of view, and without changing how the frontend talks to the server. The updated code was tested locally, and the backend passes were pushed successfully to the linked Apps Script project.

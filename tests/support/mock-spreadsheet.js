@@ -32,6 +32,17 @@ class MockRange {
     return this;
   }
 
+  setValues(values) {
+    for (let rowOffset = 0; rowOffset < this.numRows; rowOffset += 1) {
+      for (let colOffset = 0; colOffset < this.numColumns; colOffset += 1) {
+        const rowValues = values[rowOffset] || [];
+        this.sheet.writeCell(this.row + rowOffset, this.column + colOffset, rowValues[colOffset]);
+      }
+    }
+
+    return this;
+  }
+
   clearContent() {
     this.sheet.writeCell(this.row, this.column, '');
     return this;
@@ -124,7 +135,9 @@ class MockSheet {
 }
 
 class MockSpreadsheet {
-  constructor(sheetDefinitions) {
+  constructor(sheetDefinitions, stats, spreadsheetId) {
+    this.stats = stats;
+    this.spreadsheetId = spreadsheetId;
     this.sheets = new Map(
       Object.entries(sheetDefinitions).map(([sheetName, definition]) => {
         const values = Array.isArray(definition) ? definition : definition.values;
@@ -135,21 +148,33 @@ class MockSpreadsheet {
   }
 
   getSheetByName(name) {
+    if (this.stats) {
+      const key = `${this.spreadsheetId}:${name}`;
+      this.stats.getSheetByName[key] = (this.stats.getSheetByName[key] || 0) + 1;
+    }
+
     return this.sheets.get(name) || null;
   }
 }
 
 export function createSpreadsheetApp(spreadsheetsById) {
+  const stats = {
+    openById: {},
+    getSheetByName: {}
+  };
   const spreadsheets = new Map(
-    Object.entries(spreadsheetsById).map(([id, sheetDefinitions]) => [id, new MockSpreadsheet(sheetDefinitions)])
+    Object.entries(spreadsheetsById).map(([id, sheetDefinitions]) => [id, new MockSpreadsheet(sheetDefinitions, stats, id)])
   );
 
   return {
+    __stats: stats,
     openById(id) {
       const spreadsheet = spreadsheets.get(id);
       if (!spreadsheet) {
         throw new Error(`Unknown spreadsheet id: ${id}`);
       }
+
+      stats.openById[id] = (stats.openById[id] || 0) + 1;
 
       return spreadsheet;
     }
@@ -162,6 +187,47 @@ export function createPropertiesService(properties = {}) {
       return {
         getProperty(name) {
           return properties[name] || null;
+        }
+      };
+    }
+  };
+}
+
+export function createLockService() {
+  const events = [];
+
+  return {
+    events,
+    getScriptLock() {
+      return {
+        waitLock(timeout) {
+          events.push({ type: 'waitLock', timeout });
+        },
+        releaseLock() {
+          events.push({ type: 'releaseLock' });
+        }
+      };
+    }
+  };
+}
+
+export function createUrlFetchApp(responses) {
+  const queue = Array.isArray(responses) ? responses.slice() : [responses];
+
+  return {
+    fetch() {
+      if (!queue.length) {
+        throw new Error('No mock fetch response available.');
+      }
+
+      const next = queue.shift();
+
+      return {
+        getContentText() {
+          return next.body;
+        },
+        getResponseCode() {
+          return next.statusCode;
         }
       };
     }

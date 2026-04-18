@@ -436,6 +436,7 @@
       var currentRegion = '';
       var currentSalesperson = '';
       var currentEditRowNumber = null;
+      var regionLoadToken = 0;
       var currentHeaders = {
         B: 'Column B',
         D: 'Column D',
@@ -536,17 +537,27 @@
           return;
         }
 
+        var loadToken = ++regionLoadToken;
+
         setStatus('Loading region data...');
 
         google.script.run
-          .withSuccessHandler(function(data) {
-            populateSalespeople(data.salespeople || []);
+          .withSuccessHandler(function(salespeople) {
+            if (loadToken !== regionLoadToken) {
+              return;
+            }
+
+            populateSalespeople(salespeople || []);
             setStatus('');
           })
           .withFailureHandler(function(err) {
-            setStatus((err && err.message) ? err.message : 'Failed to load region data.', true);
+            if (loadToken !== regionLoadToken) {
+              return;
+            }
+
+            setStatus((err && err.message) ? err.message : 'Failed to load salespeople.', true);
           })
-          .getInitialData(currentRegion);
+          .getRegionSalespeople(currentRegion);
       }
 
       function loadListings() {
