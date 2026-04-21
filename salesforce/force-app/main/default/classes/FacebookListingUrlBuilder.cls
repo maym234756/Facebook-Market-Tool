@@ -30,10 +30,15 @@ public with sharing class FacebookListingUrlBuilder {
         if (settings == null
                 || String.isBlank(settings.AppsScriptUrl__c)
                 || String.isBlank(settings.EmbedSecret__c)) {
-            throw new AuraHandledException(
+            AuraHandledException ahe = new AuraHandledException(
                 'FacebookListingSettings__c is not configured. '
                 + 'Set AppsScriptUrl__c and EmbedSecret__c in Custom Settings.'
             );
+            ahe.setMessage(
+                'FacebookListingSettings__c is not configured. '
+                + 'Set AppsScriptUrl__c and EmbedSecret__c in Custom Settings.'
+            );
+            throw ahe;
         }
 
         Long expiresAt = Datetime.now().getTime() + TOKEN_TTL_MS;
