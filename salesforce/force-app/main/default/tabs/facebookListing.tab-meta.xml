@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomTab xmlns="http://soap.sforce.com/2006/04/metadata">
+    <label>Facebook Listing</label>
+    <lwcComponent>facebookListing</lwcComponent>
+    <motif>Custom74: Airplane</motif>
+    <description>Facebook Marketplace Listings — securely embedded from Apps Script.</description>
+</CustomTab>

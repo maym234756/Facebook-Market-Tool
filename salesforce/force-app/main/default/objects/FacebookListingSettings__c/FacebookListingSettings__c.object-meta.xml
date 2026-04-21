@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomObject xmlns="http://soap.sforce.com/2006/04/metadata">
+    <customSettingsType>Hierarchy</customSettingsType>
+    <description>Configuration for the Facebook Listing Salesforce tab integration.</description>
+    <enableEnhancedLookup>false</enableEnhancedLookup>
+    <label>Facebook Listing Settings</label>
+    <visibility>Public</visibility>
+    <fields>
+        <fullName>AppsScriptUrl__c</fullName>
+        <description>The deployed Google Apps Script web app URL (without query params).</description>
+        <externalId>false</externalId>
+        <label>Apps Script URL</label>
+        <length>500</length>
+        <required>true</required>
+        <trackTrending>false</trackTrending>
+        <type>Text</type>
+        <unique>false</unique>
+    </fields>
+    <fields>
+        <fullName>EmbedSecret__c</fullName>
+        <description>Shared secret (SALESFORCE_EMBED_SECRET) set in the Apps Script Script Properties. Keep this value confidential.</description>
+        <externalId>false</externalId>
+        <label>Embed Secret</label>
+        <length>255</length>
+        <required>true</required>
+        <trackTrending>false</trackTrending>
+        <type>Text</type>
+        <unique>false</unique>
+    </fields>
+</CustomObject>

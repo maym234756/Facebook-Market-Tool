@@ -1,0 +1,61 @@
+<template>
+    <div class="container">
+        <!-- Top-level tab bar -->
+        <lightning-tab-bar>
+            <lightning-tab
+                label="Listings"
+                value="listings"
+                onactive={handleTabChange}>
+            </lightning-tab>
+            <lightning-tab
+                label="Analytics"
+                value="analytics"
+                onactive={handleTabChange}>
+            </lightning-tab>
+            <lightning-tab
+                label="Manager"
+                value="manager"
+                onactive={handleTabChange}>
+            </lightning-tab>
+            <lightning-tab
+                label="Create Listing"
+                value="create"
+                onactive={handleTabChange}>
+            </lightning-tab>
+        </lightning-tab-bar>
+
+        <!-- CREATE LISTING — native Salesforce form (writes back to Google Sheets) -->
+        <template lwc:if={isCreateTab}>
+            <c-facebook-listing-create></c-facebook-listing-create>
+        </template>
+
+        <!-- EMBEDDED APP tabs (Listings / Analytics / Manager) -->
+        <template lwc:if={isEmbedTab}>
+            <!-- Loading / error states -->
+            <template lwc:if={isLoading}>
+                <div class="spinner-wrap">
+                    <lightning-spinner alternative-text="Loading Facebook Listings…" size="large"></lightning-spinner>
+                </div>
+            </template>
+
+            <template lwc:if={errorMessage}>
+                <div class="error-box">
+                    <lightning-icon icon-name="utility:error" variant="error" size="small"></lightning-icon>
+                    <span>{errorMessage}</span>
+                </div>
+            </template>
+
+            <!-- Secure iframe — src is always a fresh signed URL -->
+            <template lwc:if={signedUrl}>
+                <iframe
+                    title="Facebook Marketplace Listings"
+                    src={signedUrl}
+                    class="listing-frame"
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                    allowfullscreen
+                    referrerpolicy="no-referrer-when-downgrade">
+                </iframe>
+            </template>
+        </template>
+    </div>
+</template>

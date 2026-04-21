@@ -1,0 +1,174 @@
+<template>
+    <div class="create-wrap">
+        <h2 class="form-title">Create Facebook Listing</h2>
+
+        <!-- Step 1: Region + Salesperson -->
+        <div class="form-section">
+            <div class="field-row">
+                <lightning-combobox
+                    label="Region"
+                    placeholder="Select region…"
+                    value={region}
+                    options={regionOptions}
+                    onchange={handleRegionChange}
+                    required>
+                </lightning-combobox>
+
+                <lightning-combobox
+                    label="Salesperson"
+                    placeholder="Select salesperson…"
+                    value={salespersonName}
+                    options={salespersonOptions}
+                    disabled={noRegion}
+                    onchange={handleSalespersonChange}
+                    required>
+                </lightning-combobox>
+            </div>
+        </div>
+
+        <!-- Step 2: Boat selection -->
+        <div class="form-section">
+            <div class="field-row">
+                <lightning-combobox
+                    label="Boat Class"
+                    placeholder="Select class…"
+                    value={className}
+                    options={classOptions}
+                    disabled={noRegion}
+                    onchange={handleClassChange}
+                    required>
+                </lightning-combobox>
+
+                <lightning-combobox
+                    label="Boat"
+                    placeholder="Select boat…"
+                    value={stockNum}
+                    options={boatOptions}
+                    disabled={noClass}
+                    onchange={handleBoatChange}
+                    required>
+                </lightning-combobox>
+            </div>
+
+            <!-- Boat details read-only summary -->
+            <template lwc:if={boatDetails}>
+                <div class="details-grid">
+                    <div class="detail-item">
+                        <span class="detail-label">Stock #</span>
+                        <span class="detail-value">{boatDetails.stockNum}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Price</span>
+                        <span class="detail-value">{boatDetails.price}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Hours</span>
+                        <span class="detail-value">{boatDetails.hours}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Classification</span>
+                        <span class="detail-value">{boatDetails.classification}</span>
+                    </div>
+                    <div class="detail-item detail-wide">
+                        <span class="detail-label">Motor Info</span>
+                        <span class="detail-value">{boatDetails.motorInfo}</span>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <!-- Step 3: Optional links -->
+        <div class="form-section">
+            <div class="field-row">
+                <lightning-input
+                    label="BMB Board Link"
+                    placeholder="https://…"
+                    value={bmbBoard}
+                    type="url"
+                    onchange={handleBmbChange}>
+                </lightning-input>
+                <lightning-input
+                    label="Video Link"
+                    placeholder="https://…"
+                    value={video}
+                    type="url"
+                    onchange={handleVideoChange}>
+                </lightning-input>
+            </div>
+            <lightning-input
+                label="Listing URL / Link"
+                placeholder="https://…"
+                value={listingLink}
+                type="url"
+                onchange={handleLinkChange}>
+            </lightning-input>
+        </div>
+
+        <!-- Step 4: AI Listing -->
+        <div class="form-section">
+            <div class="ai-header">
+                <span class="section-label">AI-Generated Listing</span>
+                <lightning-button
+                    label="Generate"
+                    variant="brand"
+                    icon-name="utility:sparkles"
+                    disabled={cannotGenerate}
+                    onclick={handleGenerate}>
+                </lightning-button>
+            </div>
+
+            <template lwc:if={isGenerating}>
+                <div class="spinner-inline">
+                    <lightning-spinner alternative-text="Generating listing…" size="small"></lightning-spinner>
+                    <span class="spinner-label">Generating listing…</span>
+                </div>
+            </template>
+
+            <lightning-textarea
+                label=""
+                placeholder="Generated listing will appear here. You can edit it before saving."
+                value={aiListing}
+                rows="10"
+                onchange={handleListingTextChange}>
+            </lightning-textarea>
+        </div>
+
+        <!-- Error / success banners -->
+        <template lwc:if={errorMessage}>
+            <div class="banner banner-error">
+                <lightning-icon icon-name="utility:error" variant="error" size="x-small"></lightning-icon>
+                <span>{errorMessage}</span>
+            </div>
+        </template>
+        <template lwc:if={successMessage}>
+            <div class="banner banner-success">
+                <lightning-icon icon-name="utility:success" variant="success" size="x-small"></lightning-icon>
+                <span>{successMessage}</span>
+            </div>
+        </template>
+
+        <!-- Save -->
+        <div class="form-actions">
+            <lightning-button
+                label="Save to Google Sheets"
+                variant="success"
+                icon-name="utility:save"
+                disabled={cannotSave}
+                onclick={handleSave}>
+            </lightning-button>
+
+            <lightning-button
+                label="Reset Form"
+                variant="neutral"
+                onclick={handleReset}>
+            </lightning-button>
+        </div>
+
+        <template lwc:if={isSaving}>
+            <div class="spinner-inline">
+                <lightning-spinner alternative-text="Saving…" size="small"></lightning-spinner>
+                <span class="spinner-label">Saving to Google Sheets…</span>
+            </div>
+        </template>
+    </div>
+</template>

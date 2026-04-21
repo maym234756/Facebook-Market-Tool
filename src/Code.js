@@ -28,6 +28,9 @@ const EXECUTION_CACHE = {
   sheetsByKey: {},
   salespersonConfigByRegion: {}
 };
+const SALESFORCE_EMBED_MODE = "salesforce";
+const SALESFORCE_WRITE_MODE = "salesforce-write";
+const SALESFORCE_EMBED_SECRET_PROPERTY = "SALESFORCE_EMBED_SECRET";
 
 // Columns on helper sheets
 const COL = {
@@ -56,7 +59,12 @@ const NON_SALESPERSON_TABS = [
 ];
 
 function doGet(e) {
-  const page = (e && e.parameter && e.parameter.page) ? e.parameter.page : "index";
+  const page = normalizePage_((e && e.parameter && e.parameter.page) ? e.parameter.page : "index");
+
+  if (isSalesforceEmbedRequest_(e)) {
+    validateSalesforceEmbedRequest_(e, page);
+  }
+
   const templateName =
     page === "listings" ? "Listings" :
     page === "analytics" ? "Analytics" :
@@ -66,11 +74,217 @@ function doGet(e) {
   const template = HtmlService.createTemplateFromFile(templateName);
   template.appUrl = ScriptApp.getService().getUrl();
 
-  return template.evaluate().setTitle("PBC/OMG Facebook Listings App");
+  const output = template.evaluate().setTitle("PBC/OMG Facebook Listings App");
+
+  if (isSalesforceEmbedRequest_(e)) {
+    return allowIframeEmbedding_(output);
+  }
+
+  return output;
 }
 
 function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
+}
+
+// ---------------------------------------------------------------------------
+// Salesforce write-back endpoint (doPost)
+// ---------------------------------------------------------------------------
+// All Salesforce → Sheets calls POST JSON to this endpoint.
+// The body must include { action, expires, sig, ...data }.
+// Signature payload: "salesforce-write:<action>:<expires>"
+// ---------------------------------------------------------------------------
+
+function doPost(e) {
+  try {
+    const body = parseJsonResponse_(
+      e && e.postData && e.postData.contents ? e.postData.contents : "{}",
+      "Invalid request body."
+    );
+
+    const action  = String(body.action  || "").trim();
+    const expires = Number(body.expires || 0);
+    const sig     = String(body.sig     || "").trim().toLowerCase();
+
+    if (!action || !expires || !sig) {
+      return jsonError_("Missing required fields: action, expires, sig.");
+    }
+
+    // Validate token
+    if (!isFinite(expires)) {
+      return jsonError_("Invalid expires value.");
+    }
+    if (Date.now() > expires) {
+      return jsonError_("Expired token.");
+    }
+
+    const secret = getSalesforceEmbedSecret_();
+    const expectedSig = createSalesforceWriteSignature_(action, expires, secret);
+    if (!constantTimeEquals_(sig, expectedSig)) {
+      return jsonError_("Invalid token.");
+    }
+
+    // Route action
+    if (action === "saveListing") {
+      const region = String(body.region || "").trim();
+      saveListing(region, body);
+      return jsonSuccess_({ saved: true });
+    }
+
+    if (action === "generateListing") {
+      const region = String(body.region || "").trim();
+      const text = generateListing(region, body);
+      return jsonSuccess_({ listing: text });
+    }
+
+    if (action === "getBoatsByClass") {
+      const region    = String(body.region    || "").trim();
+      const className = String(body.className || "").trim();
+      const boats = getBoatsByClass(region, className);
+      return jsonSuccess_({ boats: boats });
+    }
+
+    if (action === "getBoatDetails") {
+      const region   = String(body.region   || "").trim();
+      const stockNum = String(body.stockNum || "").trim();
+      const details = getBoatDetails(region, stockNum);
+      return jsonSuccess_({ details: details });
+    }
+
+    if (action === "getFormData") {
+      const region = String(body.region || "").trim();
+      const data = {
+        regions:     getRegions(),
+        salespeople: region ? getSalespeople_(region) : [],
+        classes:     region ? getClasses_(region) : []
+      };
+      return jsonSuccess_(data);
+    }
+
+    return jsonError_("Unknown action: " + action);
+
+  } catch (err) {
+    return jsonError_(String((err && err.message) ? err.message : err));
+  }
+}
+
+function createSalesforceWriteSignature_(action, expiresAt, secret) {
+  const payload = [SALESFORCE_WRITE_MODE, String(action), String(expiresAt)].join(":");
+  const signatureBytes = Utilities.computeHmacSha256Signature(payload, secret);
+  return bytesToHex_(signatureBytes);
+}
+
+function jsonSuccess_(data) {
+  return ContentService
+    .createTextOutput(JSON.stringify({ ok: true, data: data }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function jsonError_(message) {
+  return ContentService
+    .createTextOutput(JSON.stringify({ ok: false, error: message }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function normalizePage_(page) {
+  const normalizedPage = String(page || "").trim().toLowerCase();
+
+  return normalizedPage === "listings" || normalizedPage === "analytics" || normalizedPage === "manager"
+    ? normalizedPage
+    : "index";
+}
+
+function isSalesforceEmbedRequest_(e) {
+  const embed = e && e.parameter && e.parameter.embed ? e.parameter.embed : "";
+  return String(embed).trim().toLowerCase() === SALESFORCE_EMBED_MODE;
+}
+
+function validateSalesforceEmbedRequest_(e, page) {
+  const parameters = e && e.parameter ? e.parameter : {};
+  const expiresRaw = String(parameters.expires || "").trim();
+  const signature = String(parameters.sig || "").trim().toLowerCase();
+
+  if (!expiresRaw || !signature) {
+    throw new Error("Missing Salesforce embed token.");
+  }
+
+  const expiresAt = Number(expiresRaw);
+  if (!isFinite(expiresAt)) {
+    throw new Error("Invalid Salesforce embed expiration.");
+  }
+
+  if (Date.now() > expiresAt) {
+    throw new Error("Expired Salesforce embed token.");
+  }
+
+  const expectedSignature = createSalesforceEmbedSignature_(page, expiresAt, getSalesforceEmbedSecret_());
+  if (!constantTimeEquals_(signature, expectedSignature)) {
+    throw new Error("Invalid Salesforce embed token.");
+  }
+}
+
+function getSalesforceEmbedSecret_() {
+  const properties = PropertiesService.getScriptProperties();
+  const secret = properties && typeof properties.getProperty === "function"
+    ? properties.getProperty(SALESFORCE_EMBED_SECRET_PROPERTY)
+    : "";
+
+  if (!String(secret || "").trim()) {
+    throw new Error("Missing SALESFORCE_EMBED_SECRET in Script Properties.");
+  }
+
+  return String(secret).trim();
+}
+
+function createSalesforceEmbedSignature_(page, expiresAt, secret) {
+  const payload = buildSalesforceEmbedPayload_(page, expiresAt);
+  const signatureBytes = Utilities.computeHmacSha256Signature(payload, secret);
+
+  return bytesToHex_(signatureBytes);
+}
+
+function buildSalesforceEmbedPayload_(page, expiresAt) {
+  return [SALESFORCE_EMBED_MODE, normalizePage_(page), String(expiresAt)].join(":");
+}
+
+function bytesToHex_(bytes) {
+  return (bytes || [])
+    .map(function(byte) {
+      const normalizedByte = byte < 0 ? byte + 256 : byte;
+      return ("0" + normalizedByte.toString(16)).slice(-2);
+    })
+    .join("");
+}
+
+function constantTimeEquals_(left, right) {
+  const leftValue = String(left || "");
+  const rightValue = String(right || "");
+
+  if (leftValue.length !== rightValue.length) {
+    return false;
+  }
+
+  let mismatch = 0;
+
+  for (let i = 0; i < leftValue.length; i++) {
+    mismatch |= leftValue.charCodeAt(i) ^ rightValue.charCodeAt(i);
+  }
+
+  return mismatch === 0;
+}
+
+function allowIframeEmbedding_(htmlOutput) {
+  if (
+    htmlOutput &&
+    typeof htmlOutput.setXFrameOptionsMode === "function" &&
+    HtmlService &&
+    HtmlService.XFrameOptionsMode &&
+    HtmlService.XFrameOptionsMode.ALLOWALL
+  ) {
+    return htmlOutput.setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+
+  return htmlOutput;
 }
 
 function getRegions() {
