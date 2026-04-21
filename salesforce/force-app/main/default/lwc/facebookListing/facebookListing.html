@@ -1,61 +1,72 @@
 <template>
     <div class="container">
-        <!-- Top-level tab bar -->
-        <lightning-tab-bar>
-            <lightning-tab
-                label="Listings"
-                value="listings"
-                onactive={handleTabChange}>
-            </lightning-tab>
-            <lightning-tab
-                label="Analytics"
-                value="analytics"
-                onactive={handleTabChange}>
-            </lightning-tab>
-            <lightning-tab
-                label="Manager"
-                value="manager"
-                onactive={handleTabChange}>
-            </lightning-tab>
-            <lightning-tab
-                label="Create Listing"
-                value="create"
-                onactive={handleTabChange}>
-            </lightning-tab>
-        </lightning-tab-bar>
+        <lightning-tabset>
 
-        <!-- CREATE LISTING — native Salesforce form (writes back to Google Sheets) -->
-        <template lwc:if={isCreateTab}>
-            <c-facebook-listing-create></c-facebook-listing-create>
-        </template>
+            <!-- LISTINGS tab -->
+            <lightning-tab label="Listings" value="listings">
+                <template lwc:if={listingsLoading}>
+                    <div class="spinner-wrap">
+                        <lightning-spinner alternative-text="Loading…" size="large"></lightning-spinner>
+                    </div>
+                </template>
+                <template lwc:if={listingsError}>
+                    <div class="error-box">
+                        <lightning-icon icon-name="utility:error" variant="error" size="small"></lightning-icon>
+                        <span>{listingsError}</span>
+                    </div>
+                </template>
+                <template lwc:if={listingsUrl}>
+                    <iframe title="Listings" src={listingsUrl} class="listing-frame"
+                        sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                        allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe>
+                </template>
+            </lightning-tab>
 
-        <!-- EMBEDDED APP tabs (Listings / Analytics / Manager) -->
-        <template lwc:if={isEmbedTab}>
-            <!-- Loading / error states -->
-            <template lwc:if={isLoading}>
-                <div class="spinner-wrap">
-                    <lightning-spinner alternative-text="Loading Facebook Listings…" size="large"></lightning-spinner>
-                </div>
-            </template>
+            <!-- ANALYTICS tab -->
+            <lightning-tab label="Analytics" value="analytics">
+                <template lwc:if={analyticsLoading}>
+                    <div class="spinner-wrap">
+                        <lightning-spinner alternative-text="Loading…" size="large"></lightning-spinner>
+                    </div>
+                </template>
+                <template lwc:if={analyticsError}>
+                    <div class="error-box">
+                        <lightning-icon icon-name="utility:error" variant="error" size="small"></lightning-icon>
+                        <span>{analyticsError}</span>
+                    </div>
+                </template>
+                <template lwc:if={analyticsUrl}>
+                    <iframe title="Analytics" src={analyticsUrl} class="listing-frame"
+                        sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                        allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe>
+                </template>
+            </lightning-tab>
 
-            <template lwc:if={errorMessage}>
-                <div class="error-box">
-                    <lightning-icon icon-name="utility:error" variant="error" size="small"></lightning-icon>
-                    <span>{errorMessage}</span>
-                </div>
-            </template>
+            <!-- MANAGER tab -->
+            <lightning-tab label="Manager" value="manager">
+                <template lwc:if={managerLoading}>
+                    <div class="spinner-wrap">
+                        <lightning-spinner alternative-text="Loading…" size="large"></lightning-spinner>
+                    </div>
+                </template>
+                <template lwc:if={managerError}>
+                    <div class="error-box">
+                        <lightning-icon icon-name="utility:error" variant="error" size="small"></lightning-icon>
+                        <span>{managerError}</span>
+                    </div>
+                </template>
+                <template lwc:if={managerUrl}>
+                    <iframe title="Manager" src={managerUrl} class="listing-frame"
+                        sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                        allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe>
+                </template>
+            </lightning-tab>
 
-            <!-- Secure iframe — src is always a fresh signed URL -->
-            <template lwc:if={signedUrl}>
-                <iframe
-                    title="Facebook Marketplace Listings"
-                    src={signedUrl}
-                    class="listing-frame"
-                    sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-                    allowfullscreen
-                    referrerpolicy="no-referrer-when-downgrade">
-                </iframe>
-            </template>
-        </template>
+            <!-- CREATE LISTING tab — native Salesforce form -->
+            <lightning-tab label="Create Listing" value="create">
+                <c-facebook-listing-create></c-facebook-listing-create>
+            </lightning-tab>
+
+        </lightning-tabset>
     </div>
 </template>

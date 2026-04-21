@@ -10,7 +10,7 @@
     "push": "node scripts/run-clasp.mjs push",
     "push:watch": "node scripts/run-clasp.mjs push --watch",
     "open": "node scripts/run-clasp.mjs open",
-    "deploy": "node scripts/run-clasp.mjs deploy --description VS Code deployment",
+    "deploy": "node scripts/run-clasp.mjs deploy",
     "build": "node scripts/build.mjs",
     "sandbox:refresh": "node scripts/refresh-sandbox.mjs",
     "typecheck": "node scripts/run-tsc.mjs --noEmit",

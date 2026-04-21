@@ -90,13 +90,32 @@ public with sharing class FacebookListingCalloutService {
             throw new AuraHandledException('Callout failed: ' + ex.getMessage());
         }
 
+        // Google Apps Script redirects the initial POST to a finalized execution URL
+        // that must be retrieved with GET (the response body is on the redirect target).
+        if ((res.getStatusCode() == 301 || res.getStatusCode() == 302 || res.getStatusCode() == 303)
+                && String.isNotBlank(res.getHeader('Location'))) {
+            String redirectUrl = res.getHeader('Location');
+            HttpRequest redir = new HttpRequest();
+            redir.setEndpoint(redirectUrl);
+            redir.setMethod('GET');
+            redir.setTimeout(TIMEOUT_MS);
+            try {
+                res = http.send(redir);
+            } catch (CalloutException ex) {
+                throw new AuraHandledException('Redirect callout failed: ' + ex.getMessage());
+            }
+        }
+
         String responseBody = res.getBody();
         Map<String, Object> parsed;
         try {
             parsed = (Map<String, Object>) JSON.deserializeUntyped(responseBody);
         } catch (JSONException ex) {
+            // Surface enough context for diagnosis: status, first 800 chars of body
+            String snippet = responseBody != null && responseBody.length() > 800
+                ? responseBody.substring(0, 800) : responseBody;
             throw new AuraHandledException(
-                'Apps Script returned invalid JSON (HTTP ' + res.getStatusCode() + ').'
+                'Apps Script returned invalid JSON (HTTP ' + res.getStatusCode() + '): ' + snippet
             );
         }
 

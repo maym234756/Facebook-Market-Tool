@@ -34,8 +34,19 @@ export default class FacebookListingCreate extends LightningElement {
 
     // -----------------------------------------------------------------------
     connectedCallback() {
+        if (!document.getElementById('fb-dark-bg')) {
+            const s = document.createElement('style');
+            s.id = 'fb-dark-bg';
+            s.textContent = 'html,body{overflow:hidden!important;background:#061a38!important}';
+            document.head.appendChild(s);
+        }
         // Load top-level form data (regions, empty salespeople + classes)
         this._loadFormData('');
+    }
+
+    disconnectedCallback() {
+        const s = document.getElementById('fb-dark-bg');
+        if (s) s.remove();
     }
 
     // -----------------------------------------------------------------------
@@ -178,6 +189,16 @@ export default class FacebookListingCreate extends LightningElement {
     }
 
     // -----------------------------------------------------------------------
+    // Copy listing to clipboard
+    // -----------------------------------------------------------------------
+    handleCopyListing() {
+        if (!this.aiListing) return;
+        navigator.clipboard.writeText(this.aiListing)
+            .then(() => { this.successMessage = 'Listing copied to clipboard!'; })
+            .catch(() => { this.errorMessage = 'Could not copy to clipboard.'; });
+    }
+
+    // -----------------------------------------------------------------------
     // Reset
     // -----------------------------------------------------------------------
     handleReset() {
@@ -203,11 +224,22 @@ export default class FacebookListingCreate extends LightningElement {
     get noRegion()      { return !this.region; }
     get noClass()       { return !this.className; }
 
+    get ynOptions() {
+        return [
+            { label: 'Y', value: 'Y' },
+            { label: 'N', value: 'N' }
+        ];
+    }
+
     get cannotGenerate() {
         return this.isGenerating
             || !this.region
             || !this.salespersonName
             || !this.stockNum;
+    }
+
+    get cannotCopy() {
+        return !this.aiListing;
     }
 
     get cannotSave() {

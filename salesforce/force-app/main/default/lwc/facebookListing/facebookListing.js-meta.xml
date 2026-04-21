@@ -7,6 +7,16 @@
         <target>lightning__AppPage</target>
         <target>lightning__RecordPage</target>
         <target>lightning__HomePage</target>
+        <target>lightningCommunity__Page</target>
+        <target>lightningCommunity__Default</target>
     </targets>
+    <targetConfigs>
+        <targetConfig targets="lightning__AppPage,lightning__RecordPage,lightning__HomePage">
+            <supportedFormFactors>
+                <supportedFormFactor type="Large"/>
+                <supportedFormFactor type="Small"/>
+            </supportedFormFactors>
+        </targetConfig>
+    </targetConfigs>
     <description>Securely embeds the Facebook Marketplace Listings App Script tool inside Salesforce.</description>
 </LightningComponentBundle>

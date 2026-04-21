@@ -1,6 +1,20 @@
 <template>
     <div class="create-wrap">
-        <h2 class="form-title">Create Facebook Listing</h2>
+        <!-- Branded header matching Apps Script -->
+        <div class="brand-header">
+            <div class="brand-header-inner">
+                <div class="brand-logo-left">
+                    <img src="https://www.premierboatingcenters.com/wp-content/uploads/2024/10/premier-boating-centers-tx.png" alt="Premier Boating Centers" />
+                </div>
+                <div class="brand-title-wrap">
+                    <h1 class="brand-title">PBC/OMG Facebook Listings Tool</h1>
+                    <div class="brand-subtitle">Internal Listing Generator &amp; Management Console</div>
+                </div>
+                <div class="brand-logo-right">
+                    <img src="https://www.oceanmarine.boats/wp-content/uploads/2025/03/ocean-marine-boats.png" alt="Ocean Marine Group" />
+                </div>
+            </div>
+        </div>
 
         <!-- Step 1: Region + Salesperson -->
         <div class="form-section">
@@ -54,6 +68,14 @@
             <template lwc:if={boatDetails}>
                 <div class="details-grid">
                     <div class="detail-item">
+                        <span class="detail-label">Classification</span>
+                        <span class="detail-value">{boatDetails.classification}</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Boat Info</span>
+                        <span class="detail-value">{boatDetails.boatInfo}</span>
+                    </div>
+                    <div class="detail-item">
                         <span class="detail-label">Stock #</span>
                         <span class="detail-value">{boatDetails.stockNum}</span>
                     </div>
@@ -65,55 +87,76 @@
                         <span class="detail-label">Hours</span>
                         <span class="detail-value">{boatDetails.hours}</span>
                     </div>
-                    <div class="detail-item">
-                        <span class="detail-label">Classification</span>
-                        <span class="detail-value">{boatDetails.classification}</span>
+                    <div class="detail-item detail-wide">
+                        <span class="detail-label">Motor</span>
+                        <span class="detail-value">{boatDetails.motorInfo}</span>
                     </div>
                     <div class="detail-item detail-wide">
-                        <span class="detail-label">Motor Info</span>
-                        <span class="detail-value">{boatDetails.motorInfo}</span>
+                        <span class="detail-label">Used Options</span>
+                        <div class="detail-value detail-multiline">{boatDetails.options}</div>
+                    </div>
+                    <div class="detail-item detail-wide">
+                        <span class="detail-label">Website Description</span>
+                        <div class="detail-value detail-multiline">{boatDetails.websiteDesc}</div>
+                    </div>
+                    <div class="detail-item detail-wide">
+                        <span class="detail-label">Website Options</span>
+                        <div class="detail-value detail-multiline">{boatDetails.websiteOptions}</div>
                     </div>
                 </div>
             </template>
         </div>
 
-        <!-- Step 3: Optional links -->
+        <!-- Step 3: Optional fields -->
         <div class="form-section">
             <div class="field-row">
-                <lightning-input
-                    label="BMB Board Link"
-                    placeholder="https://…"
+                <lightning-combobox
+                    label="BMB Board?"
+                    placeholder="Select Y or N"
                     value={bmbBoard}
-                    type="url"
+                    options={ynOptions}
                     onchange={handleBmbChange}>
-                </lightning-input>
-                <lightning-input
-                    label="Video Link"
-                    placeholder="https://…"
+                </lightning-combobox>
+                <lightning-combobox
+                    label="Video?"
+                    placeholder="Select Y or N"
                     value={video}
-                    type="url"
+                    options={ynOptions}
                     onchange={handleVideoChange}>
-                </lightning-input>
+                </lightning-combobox>
             </div>
             <lightning-input
-                label="Listing URL / Link"
-                placeholder="https://…"
+                label="Link"
+                placeholder="Paste listing link here"
                 value={listingLink}
-                type="url"
+                type="text"
                 onchange={handleLinkChange}>
             </lightning-input>
         </div>
 
-        <!-- Step 4: AI Listing -->
+        <!-- Step 4: Actions + AI Listing -->
         <div class="form-section">
-            <div class="ai-header">
-                <span class="section-label">AI-Generated Listing</span>
+            <div class="form-actions">
                 <lightning-button
-                    label="Generate"
+                    label="Generate Listing"
                     variant="brand"
                     icon-name="utility:sparkles"
                     disabled={cannotGenerate}
                     onclick={handleGenerate}>
+                </lightning-button>
+                <lightning-button
+                    label="Copy Listing"
+                    variant="neutral"
+                    icon-name="utility:copy"
+                    disabled={cannotCopy}
+                    onclick={handleCopyListing}>
+                </lightning-button>
+                <lightning-button
+                    label="Save Listing"
+                    variant="success"
+                    icon-name="utility:save"
+                    disabled={cannotSave}
+                    onclick={handleSave}>
                 </lightning-button>
             </div>
 
@@ -123,7 +166,14 @@
                     <span class="spinner-label">Generating listing…</span>
                 </div>
             </template>
+            <template lwc:if={isSaving}>
+                <div class="spinner-inline">
+                    <lightning-spinner alternative-text="Saving…" size="small"></lightning-spinner>
+                    <span class="spinner-label">Saving to Google Sheets…</span>
+                </div>
+            </template>
 
+            <span class="section-label">AI Generated Listing</span>
             <lightning-textarea
                 label=""
                 placeholder="Generated listing will appear here. You can edit it before saving."
@@ -144,30 +194,6 @@
             <div class="banner banner-success">
                 <lightning-icon icon-name="utility:success" variant="success" size="x-small"></lightning-icon>
                 <span>{successMessage}</span>
-            </div>
-        </template>
-
-        <!-- Save -->
-        <div class="form-actions">
-            <lightning-button
-                label="Save to Google Sheets"
-                variant="success"
-                icon-name="utility:save"
-                disabled={cannotSave}
-                onclick={handleSave}>
-            </lightning-button>
-
-            <lightning-button
-                label="Reset Form"
-                variant="neutral"
-                onclick={handleReset}>
-            </lightning-button>
-        </div>
-
-        <template lwc:if={isSaving}>
-            <div class="spinner-inline">
-                <lightning-spinner alternative-text="Saving…" size="small"></lightning-spinner>
-                <span class="spinner-label">Saving to Google Sheets…</span>
             </div>
         </template>
     </div>

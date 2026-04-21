@@ -979,17 +979,13 @@ function findFirstEmptyListingRow_(sheet) {
 }
 
 function writeListingRow_(sheet, rowNumber, values) {
-  const rowRange = sheet.getRange(rowNumber, LISTING_ROW_START_COLUMN, 1, LISTING_ROW_WIDTH);
-  const currentRow = rowRange.getValues()[0];
-
-  currentRow[0] = values.stockNum || "";
-  currentRow[2] = values.price || "";
-  currentRow[3] = values.colE || "";
-  currentRow[4] = values.colF || "";
-  currentRow[5] = values.description || "";
-  currentRow[6] = values.colH || "";
-
-  rowRange.setValues([currentRow]);
+  // Write each column individually to avoid overwriting formula columns (e.g. col C).
+  sheet.getRange(rowNumber, 2).setValue(values.stockNum || "");  // B: Stock #
+  sheet.getRange(rowNumber, 4).setValue(values.price || "");     // D: Price
+  sheet.getRange(rowNumber, 5).setValue(values.colE || "");      // E: BMB Board
+  sheet.getRange(rowNumber, 6).setValue(values.colF || "");      // F: Video
+  sheet.getRange(rowNumber, 7).setValue(values.description || ""); // G: Description
+  sheet.getRange(rowNumber, 8).setValue(values.colH || "");      // H: Link
 }
 
 function getDataSheet_(region) {

@@ -10,7 +10,7 @@
         <description>The deployed Google Apps Script web app URL (without query params).</description>
         <externalId>false</externalId>
         <label>Apps Script URL</label>
-        <length>500</length>
+        <length>255</length>
         <required>true</required>
         <trackTrending>false</trackTrending>
         <type>Text</type>
