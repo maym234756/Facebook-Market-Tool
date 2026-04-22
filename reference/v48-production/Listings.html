@@ -215,8 +215,6 @@
         font-size: 13px;
         table-layout: fixed;
         background: var(--white);
-        min-width: 1500px;
-        width: 1500px;
       }
 
       th, td {
@@ -225,57 +223,13 @@
         vertical-align: top;
         text-align: left;
         overflow-wrap: break-word;
+        white-space: pre-wrap;
       }
 
       th {
         position: sticky;
         top: 0;
         z-index: 2;
-        white-space: pre-wrap;
-      }
-
-      td.data-cell {
-        max-width: 320px;
-      }
-
-      tr.row-clip td.data-cell {
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-
-      tr.row-wrap td.data-cell {
-        white-space: pre-wrap;
-        overflow: visible;
-        text-overflow: clip;
-      }
-
-      .listing-link {
-        color: var(--blue-600);
-        font-weight: 800;
-        text-decoration: underline;
-      }
-
-      .listing-link:hover {
-        color: var(--navy-700);
-      }
-
-      .wrap-toggle-btn {
-        min-width: 42px;
-        padding: 8px 10px;
-        font-size: 16px;
-        line-height: 1;
-      }
-
-      .action-cell {
-        white-space: normal;
-        min-width: 230px;
-      }
-
-      .action-cell button {
-        width: auto;
-        margin-right: 8px;
-        margin-bottom: 8px;
       }
 
       .status {
@@ -644,32 +598,6 @@
           .getSalespersonListings(currentRegion, salesperson);
       }
 
-      function setRowWrapState(tr, shouldWrap) {
-        tr.classList.remove('row-clip', 'row-wrap');
-        tr.classList.add(shouldWrap ? 'row-wrap' : 'row-clip');
-        tr.dataset.wrapState = shouldWrap ? 'wrap' : 'clip';
-
-        var toggleBtn = tr.querySelector('.wrap-toggle-btn');
-        if (toggleBtn) {
-          toggleBtn.textContent = shouldWrap ? '↑' : '↓';
-          toggleBtn.title = shouldWrap ? 'Set row to clip' : 'Set row to wrap';
-        }
-      }
-
-      function toggleRowWrap(button) {
-        var tr = button.closest('tr');
-        if (!tr) return;
-
-        var shouldWrap = tr.dataset.wrapState !== 'wrap';
-        setRowWrapState(tr, shouldWrap);
-      }
-
-      function normalizeHref(url) {
-        var trimmed = String(url || '').trim();
-        if (!trimmed) return '';
-        return /^https?:\/\//i.test(trimmed) ? trimmed : 'https://' + trimmed;
-      }
-
       function renderTable(result) {
         var table = document.getElementById('listingsTable');
         var thead = table.querySelector('thead');
@@ -713,7 +641,7 @@
         var colgroup = document.createElement('colgroup');
 
         var actionCol = document.createElement('col');
-        actionCol.style.width = '230px';
+        actionCol.style.width = '180px';
         colgroup.appendChild(actionCol);
 
         for (var c = 0; c < 15; c++) {
@@ -745,8 +673,6 @@
 
         for (var r = 1; r < filteredRows.length; r++) {
           var tr = document.createElement('tr');
-          tr.dataset.wrapState = 'clip';
-          tr.classList.add('row-clip');
 
           var actionTd = document.createElement('td');
           actionTd.className = 'action-cell';
@@ -769,39 +695,13 @@
             };
           })(filteredRowNumbers[r]);
 
-          var wrapBtn = document.createElement('button');
-          wrapBtn.textContent = '↓';
-          wrapBtn.className = 'secondary wrap-toggle-btn';
-          wrapBtn.title = 'Set row to wrap';
-          wrapBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            toggleRowWrap(this);
-          });
-
           actionTd.appendChild(editBtn);
           actionTd.appendChild(deleteBtn);
-          actionTd.appendChild(wrapBtn);
           tr.appendChild(actionTd);
 
           filteredRows[r].forEach(function(cell, colIndex) {
             var td = document.createElement('td');
-            td.dataset.role = 'data-cell';
-            td.classList.add('data-cell');
-
-            if (colIndex === 7 && cell) {
-              var href = normalizeHref(cell);
-              var link = document.createElement('a');
-              link.href = href;
-              link.target = '_blank';
-              link.rel = 'noopener noreferrer';
-              link.className = 'listing-link';
-              link.textContent = 'Open Link';
-              td.appendChild(link);
-            } else {
-              td.textContent = cell;
-            }
-
+            td.textContent = cell;
             td.style.backgroundColor =
               (filteredBackgrounds[r] && filteredBackgrounds[r][colIndex]) ?
               filteredBackgrounds[r][colIndex] : '#ffffff';

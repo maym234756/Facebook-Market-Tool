@@ -43,8 +43,7 @@ const COL = {
   primaryClass: 44,      // AR
   secondaryClasses: 45,  // AS
   usedOptions: 47,       // AU
-  motorInfo: 48,         // AV
-  daysListed: 49         // AW
+  motorInfo: 48          // AV
 };
 
 const NON_SALESPERSON_TABS = [
@@ -458,7 +457,7 @@ function getBoatDetails(region, stockNum) {
     return null;
   }
 
-  const width = COL.daysListed - COL.boatInfo + 1;
+  const width = COL.motorInfo - COL.boatInfo + 1;
   const row = sheet.getRange(
     FIRST_DATA_ROW + matchOffset,
     COL.boatInfo,
@@ -475,7 +474,6 @@ function getBoatDetails(region, stockNum) {
   const primaryClass = row[7];     // AR
   const usedOptions = row[10];     // AU
   const motorInfo = row[11];       // AV
-  const daysListed = row[12];      // AW
 
   const IMAGE_START_COL = 53; // BA
   const IMAGE_COL_COUNT = 66; // BA:DN
@@ -494,7 +492,6 @@ function getBoatDetails(region, stockNum) {
   return {
     classification: String(primaryClass || ""),
     boatInfo: String(boatInfo || ""),
-    daysListed: String(daysListed || ""),
     stockNum: String(currentStock || ""),
     price: formatPrice_(salePrice),
     hours: hours === "" || hours == null ? "" : String(hours),

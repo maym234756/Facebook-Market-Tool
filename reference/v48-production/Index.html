@@ -423,11 +423,6 @@
           </div>
 
           <div>
-            <label>Days Listed</label>
-            <input id="daysListed" readonly>
-          </div>
-
-          <div>
             <label>Stock #</label>
             <input id="stockNum" readonly>
           </div>
@@ -618,76 +613,91 @@
         setStatus('All photos selected.');
       }
 
-      function base64ToUint8Array(base64) {
-        var binaryString = atob(base64);
-        var len = binaryString.length;
-        var bytes = new Uint8Array(len);
-        for (var i = 0; i < len; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
+      function getFileNameFromUrl(url, index) {
+        try {
+          var cleanUrl = url.split('?')[0];
+          var parts = cleanUrl.split('/');
+          var fileName = parts[parts.length - 1];
+          return fileName || ('image-' + (index + 1) + '.jpg');
+        } catch (e) {
+          return 'image-' + (index + 1) + '.jpg';
         }
-        return bytes;
       }
 
-      function downloadUrlsAsZip(urls, zipName) {
-        if (!urls || !urls.length) {
-          setStatus('No photos selected.', true);
+function base64ToUint8Array(base64) {
+  var binaryString = atob(base64);
+  var len = binaryString.length;
+  var bytes = new Uint8Array(len);
+
+  for (var i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+
+  return bytes;
+}
+
+function downloadUrlsAsZip(urls, zipName) {
+  if (!urls || !urls.length) {
+    setStatus('No photos selected.', true);
+    return;
+  }
+
+  setStatus('Preparing photo download...');
+
+  google.script.run
+    .withSuccessHandler(async function(files) {
+      try {
+        if (!files || !files.length) {
+          setStatus('No photos were returned for download.', true);
           return;
         }
 
-        setStatus('Preparing photo download...');
+        var validFiles = files.filter(function(file) {
+          return file && !file.error && file.base64;
+        });
 
-        google.script.run
-          .withSuccessHandler(async function(files) {
-            try {
-              if (!files || !files.length) {
-                setStatus('No photos were returned for download.', true);
-                return;
-              }
+        if (!validFiles.length) {
+          var firstError = files.find(function(file) { return file && file.error; });
+          setStatus('Failed to download photos: ' + (firstError ? firstError.error : 'No valid files returned.'), true);
+          return;
+        }
 
-              var validFiles = files.filter(function(file) {
-                return file && !file.error && file.base64;
-              });
+        var zip = new JSZip();
 
-              if (!validFiles.length) {
-                var firstError = files.find(function(file) { return file && file.error; });
-                setStatus('Failed to download photos: ' + (firstError ? firstError.error : 'No valid files returned.'), true);
-                return;
-              }
+        validFiles.forEach(function(file, index) {
+          var bytes = base64ToUint8Array(file.base64);
+          zip.file(file.fileName || ('photo-' + (index + 1)), bytes, {
+            binary: true
+          });
+        });
 
-              var zip = new JSZip();
+        var content = await zip.generateAsync({ type: 'blob' });
+        var objectUrl = URL.createObjectURL(content);
+        var a = document.createElement('a');
 
-              validFiles.forEach(function(file, index) {
-                var bytes = base64ToUint8Array(file.base64);
-                zip.file(file.fileName || ('photo-' + (index + 1)), bytes, { binary: true });
-              });
+        a.href = objectUrl;
+        a.download = zipName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
 
-              var content = await zip.generateAsync({ type: 'blob' });
-              var objectUrl = URL.createObjectURL(content);
-              var a = document.createElement('a');
+        URL.revokeObjectURL(objectUrl);
 
-              a.href = objectUrl;
-              a.download = zipName;
-              document.body.appendChild(a);
-              a.click();
-              document.body.removeChild(a);
-
-              URL.revokeObjectURL(objectUrl);
-
-              var failedCount = files.length - validFiles.length;
-              if (failedCount > 0) {
-                setStatus('Download ready. ' + failedCount + ' photo(s) could not be fetched.', true);
-              } else {
-                setStatus('Photo download ready.');
-              }
-            } catch (err) {
-              setStatus('Failed to build ZIP: ' + err.message, true);
-            }
-          })
-          .withFailureHandler(function(err) {
-            setStatus((err && err.message) ? ('Failed to download photos: ' + err.message) : 'Failed to download photos.', true);
-          })
-          .getPhotoDownloadPayload(urls);
+        var failedCount = files.length - validFiles.length;
+        if (failedCount > 0) {
+          setStatus('Download ready. ' + failedCount + ' photo(s) could not be fetched.', true);
+        } else {
+          setStatus('Photo download ready.');
+        }
+      } catch (err) {
+        setStatus('Failed to build ZIP: ' + err.message, true);
       }
+    })
+    .withFailureHandler(function(err) {
+      setStatus((err && err.message) ? ('Failed to download photos: ' + err.message) : 'Failed to download photos.', true);
+    })
+    .getPhotoDownloadPayload(urls);
+}
 
       function downloadSelectedPhotos() {
         var selected = getSelectedPhotoUrls();
@@ -703,7 +713,6 @@
       function clearBoatDetails() {
         document.getElementById('classification').value = '';
         document.getElementById('boatInfo').value = '';
-        document.getElementById('daysListed').value = '';
         document.getElementById('stockNum').value = '';
         document.getElementById('price').value = '';
         document.getElementById('hours').value = '';
@@ -899,7 +908,6 @@
 
             document.getElementById('classification').value = data.classification || '';
             document.getElementById('boatInfo').value = data.boatInfo || '';
-            document.getElementById('daysListed').value = data.daysListed || '';
             document.getElementById('stockNum').value = data.stockNum || '';
             document.getElementById('price').value = data.price || '';
             document.getElementById('hours').value = data.hours || '';
