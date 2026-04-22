@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      :root {
+        --navy-900: #061a38;
+        --navy-800: #0a2550;
+        --navy-700: #12366d;
+        --blue-600: #1a56a3;
+        --blue-500: #2f73c7;
+        --aqua-400: #79d0d8;
+        --aqua-300: #9adfe4;
+        --white: #ffffff;
+        --slate-50: #f5f8fc;
+        --slate-100: #e8eef7;
+        --slate-200: #d5dfed;
+        --slate-500: #64748b;
+        --text-dark: #12233d;
+        --success: #0f8b6d;
+        --danger: #b42318;
+        --shadow: 0 10px 24px rgba(3, 22, 51, 0.18);
+        --radius: 16px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", Arial, sans-serif;
+        background: linear-gradient(180deg, var(--navy-900) 0%, #0b244a 100%);
+        margin: 0;
+        padding: 24px;
+        color: var(--text-dark);
+      }
+
+      .wrap {
+        max-width: 1700px;
+        margin: 0 auto;
+      }
+
+      .brand-header {
+        background: linear-gradient(135deg, rgba(255,255,255,.12), rgba(255,255,255,.05));
+        border: 1px solid rgba(121, 208, 216, 0.22);
+        border-radius: 22px;
+        padding: 18px 22px;
+        margin-bottom: 18px;
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(4px);
+      }
+
+      .brand-header-inner {
+        display: grid;
+        grid-template-columns: 220px 1fr 220px;
+        align-items: center;
+        gap: 18px;
+      }
+
+      .brand-logo-left,
+      .brand-logo-right {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 72px;
+      }
+
+      .brand-logo-left img,
+      .brand-logo-right img {
+        max-width: 100%;
+        max-height: 72px;
+        object-fit: contain;
+        display: block;
+      }
+
+      .brand-title-wrap {
+        text-align: center;
+        color: var(--white);
+      }
+
+      .brand-title {
+        margin: 0;
+        font-size: 34px;
+        font-weight: 800;
+        letter-spacing: 0.4px;
+        line-height: 1.1;
+        color: var(--white);
+      }
+
+      .brand-subtitle {
+        margin-top: 6px;
+        color: var(--aqua-300);
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 1.1px;
+        text-transform: uppercase;
+      }
+
+      .card {
+        background: rgba(255,255,255,0.98);
+        border-radius: var(--radius);
+        padding: 20px;
+        margin-bottom: 18px;
+        box-shadow: var(--shadow);
+        border: 1px solid rgba(10, 37, 80, 0.08);
+      }
+
+      h1, h2 {
+        margin: 0 0 16px;
+        color: var(--navy-800);
+      }
+
+      label {
+        display: block;
+        font-size: 12px;
+        font-weight: 800;
+        margin-bottom: 6px;
+        color: var(--navy-700);
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+      }
+
+      select, button, input, textarea {
+        box-sizing: border-box;
+        border-radius: 12px;
+        border: 1px solid var(--slate-200);
+        padding: 11px 12px;
+        font-size: 14px;
+        transition: 0.2s ease;
+      }
+
+      select, input, textarea {
+        width: 100%;
+      }
+
+      select:focus,
+      input:focus,
+      textarea:focus {
+        outline: none;
+        border-color: var(--aqua-400);
+        box-shadow: 0 0 0 3px rgba(121, 208, 216, 0.22);
+      }
+
+      button {
+        background: linear-gradient(135deg, var(--blue-600), var(--navy-700));
+        color: var(--white);
+        border: none;
+        cursor: pointer;
+        font-weight: 800;
+        letter-spacing: 0.2px;
+        box-shadow: 0 6px 14px rgba(18, 54, 109, 0.22);
+      }
+
+      button.secondary {
+        background: linear-gradient(135deg, #4a658d, #27446e);
+      }
+
+      button.danger {
+        background: linear-gradient(135deg, #c4362a, #8f1f18);
+      }
+
+      button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 10px 18px rgba(18, 54, 109, 0.26);
+      }
+
+      .nav {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: center;
+        margin-bottom: 8px;
+        font-size: 15px;
+      }
+
+      .nav a {
+        text-decoration: none;
+        font-weight: 800;
+        color: var(--navy-700);
+        padding: 8px 12px;
+        border-radius: 999px;
+        transition: 0.2s ease;
+      }
+
+      .nav a:hover {
+        background: rgba(121, 208, 216, 0.16);
+        color: var(--navy-900);
+      }
+
+      .nav span {
+        color: #8aa0bf;
+        font-weight: 700;
+      }
+
+      .toolbar {
+        display: flex;
+        gap: 12px;
+        align-items: end;
+        flex-wrap: wrap;
+      }
+
+      .table-wrap {
+        overflow: auto;
+        max-height: 75vh;
+        border: 1px solid var(--slate-200);
+        border-radius: 14px;
+        background: var(--white);
+      }
+
+      table {
+        border-collapse: collapse;
+        font-size: 13px;
+        table-layout: fixed;
+        background: var(--white);
+        width: max-content;
+        min-width: 100%;
+      }
+
+      th, td {
+        border: 1px solid #d7e1ef;
+        padding: 8px;
+        vertical-align: top;
+        text-align: left;
+        overflow-wrap: break-word;
+      }
+
+      th {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        white-space: pre-wrap;
+      }
+
+      td.data-cell {
+        max-width: 320px;
+      }
+
+      tr.row-clip td.data-cell {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      tr.row-wrap td.data-cell {
+        white-space: pre-wrap;
+        overflow: visible;
+        text-overflow: clip;
+      }
+
+      .listing-link {
+        color: var(--blue-600);
+        font-weight: 800;
+        text-decoration: underline;
+      }
+
+      .listing-link:hover {
+        color: var(--navy-700);
+      }
+
+      .status {
+        margin-top: 12px;
+        font-size: 14px;
+        font-weight: 800;
+      }
+
+      .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(2, 12, 28, .58);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+      }
+
+      .modal {
+        background: var(--white);
+        width: min(900px, 92vw);
+        max-height: 90vh;
+        overflow: auto;
+        border-radius: 18px;
+        padding: 20px;
+        box-shadow: 0 24px 50px rgba(2, 12, 28, .35);
+      }
+
+      .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+
+      .full {
+        grid-column: 1 / -1;
+      }
+
+      textarea {
+        width: 100%;
+        min-height: 120px;
+        resize: vertical;
+      }
+
+      input {
+        width: 100%;
+      }
+
+      .modal-actions {
+        display: flex;
+        gap: 12px;
+        justify-content: flex-end;
+        margin-top: 16px;
+      }
+
+      .action-cell {
+        white-space: normal;
+        min-width: 230px;
+      }
+
+      .action-cell button {
+        width: auto;
+        margin-right: 8px;
+        margin-bottom: 8px;
+      }
+
+      .wrap-toggle-btn {
+        min-width: 42px;
+        padding: 8px 10px;
+        font-size: 16px;
+        line-height: 1;
+      }
+
+      @media (max-width: 1000px) {
+        .brand-header-inner {
+          grid-template-columns: 1fr;
+        }
+
+        .brand-logo-left,
+        .brand-logo-right {
+          min-height: 50px;
+        }
+
+        .brand-logo-left img,
+        .brand-logo-right img {
+          max-height: 56px;
+        }
+
+        .brand-title {
+          font-size: 28px;
+        }
+
+        .form-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="brand-header">
+        <div class="brand-header-inner">
+          <div class="brand-logo-left">
+            <img
+              src="https://www.premierboatingcenters.com/wp-content/uploads/2024/10/premier-boating-centers-tx.png"
+              alt="Premier Boating Centers"
+            />
+          </div>
+
+          <div class="brand-title-wrap">
+            <h1 class="brand-title">PBC/OMG Facebook Listings Tool</h1>
+            <div class="brand-subtitle">Internal Listing Generator & Management Console</div>
+          </div>
+
+          <div class="brand-logo-right">
+            <img
+              src="https://www.oceanmarine.boats/wp-content/uploads/2025/03/ocean-marine-boats.png"
+              alt="Ocean Marine Group"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="nav">
+          <a id="navIndex" href="#">Listing Generator</a>
+          <span>|</span>
+          <a id="navListings" href="#">Salesperson Listings</a>
+          <span>|</span>
+          <a id="navAnalytics" href="#">Analytics</a>
+          <span>|</span>
+          <a id="navManager" href="#">Manager View</a>
+        </div>
+
+        <h1>Salesperson Listings</h1>
+
+        <div class="toolbar">
+          <div>
+            <label for="region">Region</label>
+            <select id="region" onchange="onRegionChange()">
+              <option value="">Select a region</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="salesperson">Salesperson</label>
+            <select id="salesperson">
+              <option value="">Select a salesperson</option>
+            </select>
+          </div>
+
+          <div>
+            <button type="button" onclick="loadListings()">Load Listings</button>
+          </div>
+        </div>
+
+        <div id="status" class="status"></div>
+      </div>
+
+      <div class="card">
+        <div class="table-wrap">
+          <table id="listingsTable">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div id="editModalBackdrop" class="modal-backdrop">
+      <div class="modal">
+        <h2>Edit Listing</h2>
+
+        <div class="form-grid">
+          <div>
+            <label id="labelB">Column B</label>
+            <input id="editStockNum" type="text">
+          </div>
+
+          <div>
+            <label id="labelD">Column D</label>
+            <input id="editPrice" type="text">
+          </div>
+
+          <div>
+            <label id="labelE">Column E</label>
+            <input id="editColE" type="text">
+          </div>
+
+          <div>
+            <label id="labelF">Column F</label>
+            <input id="editColF" type="text">
+          </div>
+
+          <div class="full">
+            <label id="labelG">Column G</label>
+            <textarea id="editDescription"></textarea>
+          </div>
+
+          <div class="full">
+            <label id="labelH">Column H</label>
+            <textarea id="editColH"></textarea>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button class="secondary" type="button" onclick="closeEditModal()">Cancel</button>
+          <button type="button" onclick="saveEdit()">Save Changes</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      var currentRegion = '';
+      var currentSalesperson = '';
+      var currentEditRowNumber = null;
+      var regionLoadToken = 0;
+      var currentHeaders = {
+        B: 'Column B',
+        D: 'Column D',
+        E: 'Column E',
+        F: 'Column F',
+        G: 'Column G',
+        H: 'Column H'
+      };
+
+      function setStatus(message, isError) {
+        var el = document.getElementById('status');
+        el.textContent = message || '';
+        el.style.color = isError ? '#b42318' : '#0f8b6d';
+      }
+
+      function getRegionFromUrl() {
+        var params = new URLSearchParams(window.location.search);
+        return params.get('region') || '';
+      }
+
+      function getSavedRegion() {
+        return localStorage.getItem('selectedRegion') || '';
+      }
+
+      function saveRegion(region) {
+        localStorage.setItem('selectedRegion', region || '');
+      }
+
+      function updateNavLinks() {
+        var encoded = currentRegion ? encodeURIComponent(currentRegion) : '';
+        var suffix = encoded ? '&region=' + encoded : '';
+
+        document.getElementById('navIndex').href = '<?= appUrl ?>?page=index' + suffix;
+        document.getElementById('navListings').href = '<?= appUrl ?>?page=listings' + suffix;
+        document.getElementById('navAnalytics').href = '<?= appUrl ?>?page=analytics' + suffix;
+        document.getElementById('navManager').href = '<?= appUrl ?>?page=manager' + (encoded ? '&region=' + encoded : '');
+      }
+
+      function populateRegions(regions) {
+        var select = document.getElementById('region');
+        select.innerHTML = '<option value="">Select a region</option>';
+
+        (regions || []).forEach(function(region) {
+          var option = document.createElement('option');
+          option.value = region;
+          option.textContent = region;
+          select.appendChild(option);
+        });
+
+        if (currentRegion) {
+          select.value = currentRegion;
+        }
+      }
+
+      function populateSalespeople(salespeople) {
+        var select = document.getElementById('salesperson');
+        select.innerHTML = '<option value="">Select a salesperson</option>';
+
+        (salespeople || []).forEach(function(name) {
+          var option = document.createElement('option');
+          option.value = name;
+          option.textContent = name;
+          select.appendChild(option);
+        });
+      }
+
+      function clearListingsTable() {
+        var table = document.getElementById('listingsTable');
+        table.querySelector('thead').innerHTML = '';
+        table.querySelector('tbody').innerHTML = '';
+
+        var oldColgroup = table.querySelector('colgroup');
+        if (oldColgroup) {
+          oldColgroup.remove();
+        }
+      }
+
+      function onRegionChange() {
+        currentRegion = document.getElementById('region').value || '';
+        saveRegion(currentRegion);
+        updateNavLinks();
+
+        currentSalesperson = '';
+        populateSalespeople([]);
+        clearListingsTable();
+
+        if (!currentRegion) {
+          setStatus('Select a region first.', true);
+          return;
+        }
+
+        loadRegionData();
+      }
+
+      function loadRegionData() {
+        if (!currentRegion) {
+          setStatus('Select a region first.', true);
+          return;
+        }
+
+        var loadToken = ++regionLoadToken;
+
+        setStatus('Loading region data...');
+
+        google.script.run
+          .withSuccessHandler(function(salespeople) {
+            if (loadToken !== regionLoadToken) {
+              return;
+            }
+
+            populateSalespeople(salespeople || []);
+            setStatus('');
+          })
+          .withFailureHandler(function(err) {
+            if (loadToken !== regionLoadToken) {
+              return;
+            }
+
+            setStatus((err && err.message) ? err.message : 'Failed to load salespeople.', true);
+          })
+          .getRegionSalespeople(currentRegion);
+      }
+
+      function loadListings() {
+        if (!currentRegion) {
+          setStatus('Select a region first.', true);
+          return;
+        }
+
+        var salesperson = document.getElementById('salesperson').value;
+        if (!salesperson) {
+          setStatus('Select a salesperson first.', true);
+          return;
+        }
+
+        currentSalesperson = salesperson;
+        setStatus('Loading listings...');
+
+        google.script.run
+          .withSuccessHandler(function(result) {
+            try {
+              currentHeaders = result.headers || currentHeaders;
+              renderTable(result);
+              setStatus('');
+            } catch (e) {
+              setStatus('Render error: ' + e.message, true);
+            }
+          })
+          .withFailureHandler(function(err) {
+            setStatus((err && err.message) ? err.message : 'Failed to load listings.', true);
+          })
+          .getSalespersonListings(currentRegion, salesperson);
+      }
+
+      function setRowWrapState(tr, shouldWrap) {
+        tr.classList.remove('row-clip', 'row-wrap');
+        tr.classList.add(shouldWrap ? 'row-wrap' : 'row-clip');
+        tr.dataset.wrapState = shouldWrap ? 'wrap' : 'clip';
+
+        var toggleBtn = tr.querySelector('.wrap-toggle-btn');
+        if (toggleBtn) {
+          toggleBtn.textContent = shouldWrap ? '↑' : '↓';
+          toggleBtn.title = shouldWrap ? 'Set row to clip' : 'Set row to wrap';
+        }
+      }
+
+      function toggleRowWrap(button) {
+        var tr = button.closest('tr');
+        if (!tr) return;
+
+        var shouldWrap = tr.dataset.wrapState !== 'wrap';
+        setRowWrapState(tr, shouldWrap);
+      }
+
+      function normalizeHref(url) {
+        var trimmed = String(url || '').trim();
+        if (!trimmed) return '';
+        return /^https?:\/\//i.test(trimmed) ? trimmed : 'https://' + trimmed;
+      }
+
+      function renderTable(result) {
+        var table = document.getElementById('listingsTable');
+        var thead = table.querySelector('thead');
+        var tbody = table.querySelector('tbody');
+
+        thead.innerHTML = '';
+        tbody.innerHTML = '';
+
+        var oldColgroup = table.querySelector('colgroup');
+        if (oldColgroup) {
+          oldColgroup.remove();
+        }
+
+        if (!result || !result.values || result.values.length === 0) {
+          setStatus('No data found.', true);
+          return;
+        }
+
+        var values = result.values;
+        var backgrounds = result.backgrounds || [];
+        var columnWidths = result.columnWidths || [];
+        var rowNumbers = result.rowNumbers || [];
+
+        var filteredRows = [];
+        var filteredBackgrounds = [];
+        var filteredRowNumbers = [];
+
+        for (var i = 0; i < values.length; i++) {
+          if (i === 0 || values[i][1]) {
+            filteredRows.push(values[i]);
+            filteredBackgrounds.push(backgrounds[i] || []);
+            filteredRowNumbers.push(rowNumbers[i] || (i + 1));
+          }
+        }
+
+        if (filteredRows.length === 0) {
+          setStatus('No listings found.', true);
+          return;
+        }
+
+        var colgroup = document.createElement('colgroup');
+
+        var actionCol = document.createElement('col');
+        actionCol.style.width = '230px';
+        colgroup.appendChild(actionCol);
+
+        for (var c = 0; c < 15; c++) {
+          var col = document.createElement('col');
+          col.style.width = (columnWidths[c] || 120) + 'px';
+          colgroup.appendChild(col);
+        }
+
+        table.insertBefore(colgroup, thead);
+
+        var headerRow = document.createElement('tr');
+
+        var actionHeader = document.createElement('th');
+        actionHeader.textContent = 'Actions';
+        actionHeader.style.backgroundColor = '#f2f4f7';
+        headerRow.appendChild(actionHeader);
+
+        filteredRows[0].forEach(function(cell, colIndex) {
+          var th = document.createElement('th');
+          th.textContent = cell;
+          th.style.backgroundColor =
+            (filteredBackgrounds[0] && filteredBackgrounds[0][colIndex]) ?
+            filteredBackgrounds[0][colIndex] : '#f2f4f7';
+          th.style.minWidth = (columnWidths[colIndex] || 120) + 'px';
+          headerRow.appendChild(th);
+        });
+
+        thead.appendChild(headerRow);
+
+        for (var r = 1; r < filteredRows.length; r++) {
+          var tr = document.createElement('tr');
+          tr.dataset.wrapState = 'clip';
+          tr.classList.add('row-clip');
+
+          var actionTd = document.createElement('td');
+          actionTd.className = 'action-cell';
+
+          var editBtn = document.createElement('button');
+          editBtn.textContent = 'Edit';
+          editBtn.className = 'secondary';
+          editBtn.onclick = (function(rowData, rowNumber) {
+            return function() {
+              openEditModal(rowData, rowNumber);
+            };
+          })(filteredRows[r], filteredRowNumbers[r]);
+
+          var deleteBtn = document.createElement('button');
+          deleteBtn.textContent = 'Delete';
+          deleteBtn.className = 'danger';
+          deleteBtn.onclick = (function(rowNumber) {
+            return function() {
+              deleteListing(rowNumber);
+            };
+          })(filteredRowNumbers[r]);
+
+          var wrapBtn = document.createElement('button');
+          wrapBtn.textContent = '↓';
+          wrapBtn.className = 'secondary wrap-toggle-btn';
+          wrapBtn.title = 'Set row to wrap';
+          wrapBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleRowWrap(this);
+          });
+
+          actionTd.appendChild(editBtn);
+          actionTd.appendChild(deleteBtn);
+          actionTd.appendChild(wrapBtn);
+          tr.appendChild(actionTd);
+
+          filteredRows[r].forEach(function(cell, colIndex) {
+            var td = document.createElement('td');
+            td.dataset.role = 'data-cell';
+            td.classList.add('data-cell');
+
+            if (colIndex === 7 && cell) {
+              var href = normalizeHref(cell);
+              var link = document.createElement('a');
+              link.href = href;
+              link.target = '_blank';
+              link.rel = 'noopener noreferrer';
+              link.className = 'listing-link';
+              link.textContent = 'Open Link';
+              td.appendChild(link);
+            } else {
+              td.textContent = cell;
+            }
+
+            td.style.backgroundColor =
+              (filteredBackgrounds[r] && filteredBackgrounds[r][colIndex]) ?
+              filteredBackgrounds[r][colIndex] : '#ffffff';
+            td.style.minWidth = (columnWidths[colIndex] || 120) + 'px';
+
+            tr.appendChild(td);
+          });
+
+          tbody.appendChild(tr);
+        }
+      }
+
+      function openEditModal(rowData, rowNumber) {
+        currentEditRowNumber = rowNumber;
+
+        document.getElementById('labelB').textContent = currentHeaders.B || 'Column B';
+        document.getElementById('labelD').textContent = currentHeaders.D || 'Column D';
+        document.getElementById('labelE').textContent = currentHeaders.E || 'Column E';
+        document.getElementById('labelF').textContent = currentHeaders.F || 'Column F';
+        document.getElementById('labelG').textContent = currentHeaders.G || 'Column G';
+        document.getElementById('labelH').textContent = currentHeaders.H || 'Column H';
+
+        document.getElementById('editStockNum').value = rowData[1] || '';
+        document.getElementById('editPrice').value = rowData[3] || '';
+        document.getElementById('editColE').value = rowData[4] || '';
+        document.getElementById('editColF').value = rowData[5] || '';
+        document.getElementById('editDescription').value = rowData[6] || '';
+        document.getElementById('editColH').value = rowData[7] || '';
+
+        document.getElementById('editModalBackdrop').style.display = 'flex';
+      }
+
+      function closeEditModal() {
+        currentEditRowNumber = null;
+        document.getElementById('editModalBackdrop').style.display = 'none';
+      }
+
+      function saveEdit() {
+        if (!currentRegion) {
+          setStatus('Select a region first.', true);
+          return;
+        }
+
+        if (!currentSalesperson || !currentEditRowNumber) {
+          setStatus('No listing selected for editing.', true);
+          return;
+        }
+
+        var updatedValues = {
+          stockNum: document.getElementById('editStockNum').value,
+          price: document.getElementById('editPrice').value,
+          colE: document.getElementById('editColE').value,
+          colF: document.getElementById('editColF').value,
+          description: document.getElementById('editDescription').value,
+          colH: document.getElementById('editColH').value
+        };
+
+        setStatus('Saving changes...');
+
+        google.script.run
+          .withSuccessHandler(function() {
+            closeEditModal();
+            setStatus('Listing updated.');
+            loadListings();
+          })
+          .withFailureHandler(function(err) {
+            setStatus((err && err.message) ? err.message : 'Failed to update listing.', true);
+          })
+          .updateSalespersonListing(currentRegion, currentSalesperson, currentEditRowNumber, updatedValues);
+      }
+
+      function deleteListing(rowNumber) {
+        if (!currentRegion) {
+          setStatus('Select a region first.', true);
+          return;
+        }
+
+        if (!currentSalesperson || !rowNumber) {
+          setStatus('Unable to delete listing.', true);
+          return;
+        }
+
+        var confirmed = confirm('Are you sure you want to clear this listing?');
+        if (!confirmed) return;
+
+        setStatus('Deleting listing...');
+
+        google.script.run
+          .withSuccessHandler(function() {
+            setStatus('Listing cleared.');
+            loadListings();
+          })
+          .withFailureHandler(function(err) {
+            setStatus((err && err.message) ? err.message : 'Failed to delete listing.', true);
+          })
+          .clearSalespersonListing(currentRegion, currentSalesperson, rowNumber);
+      }
+
+      function init() {
+        currentRegion = getRegionFromUrl() || getSavedRegion() || '';
+        updateNavLinks();
+
+        google.script.run
+          .withSuccessHandler(function(regions) {
+            populateRegions(regions || []);
+
+            if (currentRegion) {
+              document.getElementById('region').value = currentRegion;
+              saveRegion(currentRegion);
+              loadRegionData();
+            } else {
+              populateSalespeople([]);
+              clearListingsTable();
+              setStatus('Select a region first.', true);
+            }
+          })
+          .withFailureHandler(function(err) {
+            setStatus((err && err.message) ? err.message : 'Failed to load regions.', true);
+          })
+          .getRegions();
+      }
+
+      window.addEventListener('load', init);
+    </script>
+  </body>
+
+  <!--
+  Professional summary:
+  This file is the Salesperson Listings management page for the Apps Script web application. It
+  loads saved listing rows from each salesperson tab and provides inline operational tools to review,
+  edit, or clear existing listing records.
+
+  Operational role:
+  - Loads salesperson-specific listing data from the selected region
+  - Renders spreadsheet-backed listing rows into a structured, scrollable management table
+  - Opens a modal editor for controlled updates to key listing fields
+  - Supports clearing rows from the assigned salesperson sheet when a listing should be removed
+
+  Business purpose:
+  This page gives the team an internal maintenance interface for managing the listings that have
+  already been generated and saved, without requiring direct manual work inside the spreadsheet.
+  -->
+</html>
