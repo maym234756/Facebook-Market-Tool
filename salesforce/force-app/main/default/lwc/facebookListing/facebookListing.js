@@ -31,9 +31,26 @@ export default class FacebookListing extends LightningElement {
         if (!document.getElementById('fb-dark-bg')) {
             const s = document.createElement('style');
             s.id = 'fb-dark-bg';
-            s.textContent = 'html,body{overflow:hidden!important;background:#061a38!important}';
+            s.textContent = 'html,body{background:#061a38!important}';
             document.head.appendChild(s);
         }
+        // Make the lightning-tabset tab labels white so they're visible on the dark bar
+        if (!document.getElementById('fb-tab-style')) {
+            const t = document.createElement('style');
+            t.id = 'fb-tab-style';
+            t.textContent = [
+                '.slds-tabs_default__link,',
+                '.slds-tabs_default__link:hover,',
+                '.slds-tabs_default__link:focus {',
+                '  color: #ffffff !important;',
+                '}'
+            ].join('\n');
+            document.head.appendChild(t);
+        }
+    }
+
+    handleTabSelect() {
+        // reserved for future tab-specific logic
     }
 
     disconnectedCallback() {
@@ -41,8 +58,10 @@ export default class FacebookListing extends LightningElement {
             clearInterval(this._refreshTimer);
             this._refreshTimer = null;
         }
-        const s = document.getElementById('fb-dark-bg');
-        if (s) s.remove();
+        ['fb-dark-bg', 'fb-tab-style'].forEach(id => {
+            const s = document.getElementById(id);
+            if (s) s.remove();
+        });
     }
 
     _loadAllUrls() {

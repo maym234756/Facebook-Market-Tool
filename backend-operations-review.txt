@@ -1,0 +1,497 @@
+Backend Operations Review
+Date: 2026-04-22
+Scope: Salesforce-first operating model.
+
+Purpose
+This document focuses only on backend durability, security, throughput, failure handling, and long-term operating ability for Salesforce users. It intentionally excludes UI style, naming, cell formatting, and cosmetic concerns.
+
+Operating Model Assumed
+- All real users use the tool from Salesforce.
+- Salesforce Listing Generator is a native LWC.
+- Salesforce embedded tabs load Apps Script pages through signed iframe URLs.
+- Apps Script remains the live backend for spreadsheet reads, spreadsheet writes, and OpenAI generation.
+
+What Good Looks Like
+- 20-40 concurrent Salesforce users can open the tool without broad slowdowns.
+- Generate Listing remains predictable during OpenAI slowness.
+- One public Apps Script issue does not degrade Salesforce.
+- Save operations do not queue users behind unrelated work.
+- When something slows down, the team can identify the cause in minutes instead of guessing.
+
+Current Architecture Summary
+1. Listing Generator path
+   Salesforce LWC -> Apex FormController -> Apex CalloutService -> Apps Script doPost -> Google Sheets / OpenAI
+
+2. Embedded tab path
+   Salesforce parent LWC -> Apex UrlBuilder -> signed Apps Script URL -> Apps Script doGet -> Apps Script page init -> Apps Script server calls
+
+Executive Summary
+The current backend is usable for light internal traffic, but it is not hardened for heavy Salesforce-only usage. The most important short-term risk is synchronous AI generation. The most important hidden load multiplier is that Salesforce currently loads and refreshes all three embedded Apps Script tabs in the background. The most important long-term structural risk is that all traffic shares one Apps Script quota identity and one spreadsheet-centric backend.
+
+Priority Order
+P0
+- Move AI generation off the live synchronous request path.
+- Bind Salesforce signatures to request body + nonce.
+- Stop background loading of inactive iframe tabs.
+
+P1
+- Add durable caching for read-heavy lookups.
+- Reduce shared lock contention on saves.
+- Add rate limiting, concurrency control, and better retries.
+
+P2
+- Improve config safety and operational observability.
+- Reduce or isolate public Apps Script exposure.
+
+Issue 1: Synchronous AI Generation Chain
+Severity: Critical
+Status: Phase 1 mitigation is built locally in Salesforce, but it is not deployed or live yet.
+
+Current Risk
+- Production Generate Listing is still a blocking chain across Salesforce, Apex, Apps Script, and OpenAI.
+- Apex uses a 30-second timeout.
+- Production still has no live queue, no live polling model, and no graceful degrade path.
+
+Why It Matters
+- This is the first place users will feel pain under real traffic.
+- If OpenAI or Apps Script gets slow, Salesforce users sit on an open request until timeout or failure.
+
+What Has Been Done
+- A Salesforce-side async job object has been added locally to store queued, processing, completed, and failed generation work.
+- A local Apex submit/status service and Queueable worker have been added so Salesforce can enqueue generation work and process it outside the live browser request.
+- The Queueable reuses the current Apps Script generator path, so the existing prompt and generation behavior were not changed.
+- The native Salesforce Listing Generator LWC has been updated locally to submit a job, poll for completion, and fall back to the current synchronous path if async job submission fails.
+- The existing synchronous generate flow has been preserved, and no deployment has been made yet.
+
+What Still Needs Done
+- Add a rollout flag so the async path can be deployed with the org default set to off.
+- Add Apex tests for job submit, status polling, successful completion, failure handling, and per-user job access.
+- Deploy the new metadata and Apex only after final review.
+- Validate in-org with the async path disabled first, then enable it for a pilot user before broader rollout.
+- Add concurrency limits or fail-fast handling so bursts do not overwhelm the Salesforce queue or downstream Apps Script and OpenAI path.
+- Decide on cleanup and retention for generation job records and add basic monitoring for queue time and failure rate.
+
+Best Fix
+- Immediate practical fix: deploy the Salesforce async wrapper behind a disabled-by-default rollout flag.
+- Best long-term fix: move AI generation to an async job model with throttling, monitoring, and controlled rollout.
+- Salesforce should submit a generate job, receive a job id immediately, and poll for completion.
+- The worker that talks to OpenAI should run outside the live UI request path.
+- Add a strict concurrency cap and fail fast when the system is busy instead of letting users hang.
+
+Expected Result After Fix
+- Generate Listing no longer blocks the user on raw provider latency.
+- OpenAI slowdowns become queue delay, not Salesforce timeout.
+- The system degrades in a controlled way under bursts.
+- Current working Salesforce and Apps Script behavior remains available during rollout because the synchronous path is still preserved.
+
+Real-World Scenarios It Fixes
+- 15 salespeople click Generate Listing within 2 minutes on a Saturday morning.
+- OpenAI returns 429s for several minutes.
+- OpenAI is slow but not fully down.
+- Apps Script callouts become slow due to broader Google latency.
+
+Evidence
+- salesforce/force-app/main/default/classes/FacebookListingCalloutService.cls:16
+- salesforce/force-app/main/default/classes/FacebookListingCalloutService.cls:82
+- salesforce/force-app/main/default/classes/FacebookListingCalloutService.cls:101
+- salesforce/force-app/main/default/classes/FacebookListingFormController.cls:60
+- salesforce/force-app/main/default/classes/FacebookListingFormController.cls:71
+- salesforce/force-app/main/default/classes/FacebookListingGenerationJobService.cls:1
+- salesforce/force-app/main/default/classes/FacebookListingGenerationQueueable.cls:1
+- salesforce/force-app/main/default/lwc/facebookListingCreate/facebookListingCreate.js:195
+- salesforce/force-app/main/default/objects/FacebookListingGenerationJob__c/FacebookListingGenerationJob__c.object-meta.xml:1
+- src/Code.js:509
+- src/Code.js:869
+
+Issue 2: Salesforce POST Signatures Do Not Bind the Request Body
+Severity: Critical
+
+Current Risk
+- The write signature is based on action + expires only.
+- The actual payload body is not part of the signature.
+- The token also does not carry a nonce or replay-prevention marker.
+
+Why It Matters
+- This is a backend integrity problem.
+- A valid token for one action can be replayed with altered payload contents during the TTL window.
+- If abused, it can waste AI quota, create bad writes, and consume shared backend capacity.
+
+Best Fix
+- Sign method + action + expires + nonce + hash(body).
+- Reject reused nonce values during the TTL window.
+- Treat body mismatch as an invalid token.
+
+Expected Result After Fix
+- Payload tampering is blocked.
+- Replay risk is dramatically reduced.
+- Unauthorized backend load is less likely to affect Salesforce users.
+
+Real-World Scenarios It Fixes
+- A captured request is replayed with a different prompt or different save payload.
+- Browser tooling or logs expose a temporary signed request.
+- A user double-submits or an integration retries with altered data.
+
+Evidence
+- src/Code.js:176
+- salesforce/force-app/main/default/classes/FacebookListingCalloutService.cls:68
+- salesforce/force-app/main/default/classes/FacebookListingCalloutService.cls:69
+- salesforce/force-app/main/default/classes/FacebookListingCalloutService.cls:142
+
+Issue 3: Salesforce Background Iframe Fan-Out Creates Hidden Backend Load
+Severity: High
+
+Current Risk
+- The parent Salesforce component builds signed URLs for Listings, Analytics, and Manager on initial load.
+- It refreshes all of them every 4 minutes.
+- Each embedded Apps Script page then initializes and makes server calls on page load.
+
+Why It Matters
+- One user session creates multiple backend requests before the user even starts real work.
+- This artificially inflates Apps Script executions and Sheets reads.
+
+Best Fix
+- Lazy-load only the active tab.
+- Build the iframe URL only when the user opens that tab.
+- Refresh only the active tab, not all tabs.
+- If a tab has not been visited in a session, do not load it.
+
+Expected Result After Fix
+- Much lower background Apps Script traffic.
+- Faster initial load for Salesforce users.
+- Less spreadsheet read pressure from passive sessions.
+
+Real-World Scenarios It Fixes
+- 25 users open the Salesforce tool Monday morning and only need the Listing Generator.
+- Users leave the page open all day while background refresh keeps running.
+- Analytics and Manager traffic consume capacity even though those tabs are never opened.
+
+Evidence
+- salesforce/force-app/main/default/lwc/facebookListing/facebookListing.js:5
+- salesforce/force-app/main/default/lwc/facebookListing/facebookListing.js:28
+- salesforce/force-app/main/default/lwc/facebookListing/facebookListing.js:29
+- salesforce/force-app/main/default/lwc/facebookListing/facebookListing.js:67
+- salesforce/force-app/main/default/lwc/facebookListing/facebookListing.js:71
+- src/Listings.html:902
+- src/Analytics.html:487
+- src/Manager.html:407
+
+Issue 4: Public Anonymous Apps Script Exposure Still Threatens Salesforce Reliability
+Severity: High
+
+Current Risk
+- Apps Script is executeAs USER_DEPLOYING and access ANYONE_ANONYMOUS.
+- Salesforce and public Apps Script traffic share the same execution identity and quotas.
+
+Why It Matters
+- Even if all intended users stay in Salesforce, the public endpoint can still consume the same backend budget.
+- A public traffic spike becomes a Salesforce production incident.
+
+Best Fix
+- Separate public-facing web access from Salesforce transactional endpoints.
+- If public access must remain, isolate it in a separate deployment or separate Apps Script project.
+- Keep AI and mutating actions behind signed server-side POST paths only.
+
+Expected Result After Fix
+- Public endpoint issues stop degrading Salesforce.
+- AI and write capacity are better protected.
+- Security posture improves at the same time as reliability.
+
+Real-World Scenarios It Fixes
+- Someone shares the public URL widely.
+- A search index or bot repeatedly hits the public web app.
+- A test script accidentally floods the public endpoint.
+
+Evidence
+- src/appsscript.json:7
+- src/appsscript.json:8
+- src/Code.js:62
+- src/Code.js:103
+
+Issue 5: One Apps Script Identity Carries All Real Load
+Severity: High
+
+Current Risk
+- All executions run as the deploying user.
+- All Salesforce traffic shares one Apps Script quota pool.
+
+Why It Matters
+- This does not scale linearly with user growth.
+- More users do not create more backend capacity. They compete for the same capacity.
+
+Best Fix
+- Best long-term fix: move high-value transactional work off Apps Script into a dedicated backend service.
+- Short-term fix: separate critical Salesforce operations from less critical web traffic and monitor quota burn aggressively.
+
+Expected Result After Fix
+- Salesforce traffic stops living under one fragile quota ceiling.
+- A busy day becomes manageable instead of globally risky.
+
+Real-World Scenarios It Fixes
+- Month-end sales push with many simultaneous users.
+- Admin testing during business hours causes user slowdown.
+- OpenAI-heavy usage pushes UrlFetch usage close to quota limits.
+
+Evidence
+- src/appsscript.json:7
+- src/Code.js:315
+- src/Code.js:873
+
+Issue 6: Read Paths Depend on Repeated Sheet Scans Instead of Durable Caching
+Severity: High
+
+Current Risk
+- EXECUTION_CACHE is per-execution only.
+- Repeated requests rebuild region config, class lists, stock lookup, and boat details from Sheets.
+- Reads are mostly scan-driven.
+
+Why It Matters
+- As sheet size grows, latency rises.
+- As user count grows, the same read work gets repeated in parallel.
+
+Best Fix
+- Add CacheService-backed durable caching for region config, class lists, salesperson lists, stock-to-row lookup, and boat details.
+- Precompute a stock index or maintain one in a helper structure.
+- Cache read-mostly Salesforce payloads with short TTLs.
+
+Expected Result After Fix
+- Faster repeated lookups.
+- Lower spreadsheet read pressure.
+- Better stability during load spikes.
+
+Real-World Scenarios It Fixes
+- Many users pick the same region and class at the same time.
+- Users repeatedly inspect boat details for popular inventory.
+- Morning load causes repeated cold reads of the same data.
+
+Evidence
+- src/Code.js:26
+- src/Code.js:355
+- src/Code.js:386
+- src/Code.js:433
+- src/Code.js:714
+- src/Code.js:988
+- src/Code.js:1200
+
+Issue 7: Save and Update Throughput Is Bottlenecked by One Global Lock
+Severity: High
+
+Current Risk
+- Save, clear, and update operations run under one script-wide lock.
+- Row finding also scans the sheet before writing.
+
+Why It Matters
+- Concurrent users block each other even when working in different areas.
+- Save speed becomes unpredictable.
+
+Best Fix
+- Reduce lock duration and lock only around the minimal critical section.
+- Replace first-empty-row rescans with tracked per-sheet write position or another row allocation strategy.
+- If business rules allow it, move to a more append-oriented write flow.
+
+Expected Result After Fix
+- Faster saves.
+- Less contention under concurrent usage.
+- More consistent write latency across users.
+
+Real-World Scenarios It Fixes
+- Multiple salespeople save listings within the same minute.
+- A manager edits listings while salespeople keep saving new ones.
+- Users report random slow saves even though they are not touching the same row.
+
+Evidence
+- src/Code.js:688
+- src/Code.js:773
+- src/Code.js:966
+- src/Code.js:988
+
+Issue 8: Retry and Throttling Strategy Is Not Strong Enough for Provider Bursts
+Severity: Medium
+
+Current Risk
+- OpenAI retries only twice.
+- There is no exponential backoff, no jitter, no concurrency gate, and no per-user throttle.
+
+Why It Matters
+- Temporary provider incidents surface directly to users.
+- Burst traffic is amplified instead of smoothed.
+
+Best Fix
+- Add exponential backoff with jitter.
+- Add per-user and per-org concurrency limits.
+- Add rate limiting per minute and per day.
+- Fail fast with a clear message when the service is busy.
+
+Expected Result After Fix
+- Better stability under 429 or 5xx incidents.
+- More predictable user experience.
+- Lower chance of runaway retry storms.
+
+Real-World Scenarios It Fixes
+- OpenAI rate limits for 90 seconds.
+- Several users spam Generate after a failed attempt.
+- Temporary provider instability happens during peak hours.
+
+Evidence
+- src/Code.js:17
+- src/Code.js:869
+- src/Code.js:962
+
+Issue 9: Endpoint and Secret Configuration Are Too Manual
+Severity: Medium
+
+Current Risk
+- Endpoint URL and secret are manually maintained in Custom Settings.
+- Misconfiguration affects the entire org at once.
+
+Why It Matters
+- Configuration drift is an operational risk.
+- One wrong URL or secret swap becomes an immediate production outage.
+
+Best Fix
+- Add validation tooling for endpoint URL, signature check, and environment health.
+- Add an admin diagnostics action that verifies all backend dependencies before users notice a problem.
+- Use a stricter deployment checklist for endpoint changes.
+
+Expected Result After Fix
+- Faster detection of config drift.
+- Fewer avoidable org-wide outages.
+- Easier support when deployments change.
+
+Real-World Scenarios It Fixes
+- Wrong Apps Script deployment URL is pasted into Custom Settings.
+- Secret mismatch happens after a deployment.
+- Sandbox and production configs get mixed up.
+
+Evidence
+- salesforce/force-app/main/default/classes/FacebookListingCalloutService.cls:60
+- salesforce/force-app/main/default/classes/FacebookListingUrlBuilder.cls:26
+- salesforce/force-app/main/default/classes/FacebookListingUrlBuilder.cls:44
+
+Issue 10: Observability Is Too Weak for Long-Term Operations
+Severity: Medium
+
+Current Risk
+- There is very little structured logging.
+- There are no correlation ids across Salesforce and Apps Script.
+- There are no backend latency dashboards or failure counters.
+
+Why It Matters
+- When the system slows down, the team will not know if the cause is Salesforce, Apps Script, Sheets, OpenAI, or config drift.
+
+Best Fix
+- Add request ids to every Salesforce action.
+- Log timing per hop: Apex, Apps Script, Sheets, OpenAI.
+- Add simple operational metrics and an admin dashboard or daily report.
+
+Expected Result After Fix
+- Faster diagnosis.
+- More confident decision-making under incidents.
+- Easier capacity planning.
+
+Real-World Scenarios It Fixes
+- Users say the system is slow, but no one knows where.
+- Some actions fail while others succeed.
+- Performance slowly degrades over weeks and no trend is visible.
+
+Evidence
+- src/Code.js:934
+- salesforce/force-app/main/default/classes/FacebookListingCalloutService.cls:88
+
+Issue 11: Photo Download Backend Cost Is Real but Secondary for Salesforce
+Severity: Low to Medium
+
+Current Risk
+- Apps Script photo ZIP generation fetches images synchronously and base64-encodes them.
+- Current Salesforce photo flow mostly opens URLs, which is cheaper.
+
+Why It Matters
+- If ZIP-style photo download becomes heavily used later, it can become its own performance hotspot.
+
+Best Fix
+- Cap image count and total bytes.
+- Prefer direct URL open/download where practical.
+- If ZIP generation becomes important, move it out of Apps Script.
+
+Expected Result After Fix
+- Prevents large photo jobs from impacting the rest of the backend.
+
+Real-World Scenarios It Fixes
+- A user downloads very large photo sets repeatedly.
+- Multiple users start bulk photo downloads during business hours.
+
+Evidence
+- src/Code.js:1125
+
+Scenario Table
+
+Scenario A: 25 users open the Salesforce tool at 8:00 AM
+- What breaks first now:
+  background iframe fan-out and repeated Apps Script page init traffic
+- Best fixes that address it:
+  lazy-load active tab only, add durable caching, reduce public quota competition
+- Real result after fix:
+  morning page-open traffic is much lighter and more predictable
+
+Scenario B: 15 users generate listings within 2 minutes
+- What breaks first now:
+  synchronous AI path, OpenAI 429s, Apex timeouts
+- Best fixes that address it:
+  async job model, rate limiting, concurrency caps, better retries
+- Real result after fix:
+  generation requests queue cleanly instead of randomly timing out
+
+Scenario C: 8 users save or edit listings together
+- What breaks first now:
+  global script lock and repeated row scanning
+- Best fixes that address it:
+  narrower lock, faster row allocation, reduced critical section
+- Real result after fix:
+  saves stop feeling random and users block each other far less
+
+Scenario D: OpenAI slows down for 5 minutes
+- What breaks first now:
+  live user requests stay blocked end-to-end
+- Best fixes that address it:
+  async generation, queueing, provider backoff, fail-fast busy handling
+- Real result after fix:
+  users see delayed jobs or controlled busy messaging instead of org-wide timeout behavior
+
+Scenario E: A wrong deployment URL or secret is entered
+- What breaks first now:
+  org-wide backend failure
+- Best fixes that address it:
+  validation tooling, diagnostics, stricter config controls
+- Real result after fix:
+  config mistakes are caught earlier and diagnosed faster
+
+Scenario F: Public traffic or abuse hits the Apps Script endpoint
+- What breaks first now:
+  Salesforce users lose shared backend capacity
+- Best fixes that address it:
+  isolate public traffic, separate deployments, stronger endpoint control
+- Real result after fix:
+  Salesforce remains stable even if the public side is noisy
+
+Best Execution Order
+1. Lazy-load only the active iframe tab.
+2. Bind Salesforce action signatures to request body + nonce.
+3. Add durable caching for read-heavy lookups.
+4. Add AI throttling and concurrency controls.
+5. Replace synchronous AI generation with an async job flow.
+6. Reduce global lock contention on writes.
+7. Add request ids, timing logs, and admin diagnostics.
+8. Separate or isolate public Apps Script exposure from Salesforce-critical backend paths.
+
+What To Monitor Once Fixed
+- P50 / P95 / P99 Generate Listing latency
+- Apex callout timeout rate
+- Apps Script execution failures by action
+- OpenAI 429 / 5xx rate
+- Average and max lock wait time
+- Spreadsheet read latency for getFormData, getBoatsByClass, and getBoatDetails
+- Iframe load count per user session
+- Failed signature validation count
+- Per-user and per-day AI request volume
+
+Bottom Line
+If everyone uses the tool from Salesforce, the best results come from removing unnecessary backend fan-out, making Generate Listing asynchronous, binding signatures to the real payload, adding durable caching, and shrinking write contention. Those changes directly address the real-world ways this system would slow down or fail under multi-user use.

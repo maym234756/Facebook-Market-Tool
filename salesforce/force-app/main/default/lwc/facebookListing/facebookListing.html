@@ -1,9 +1,9 @@
 <template>
     <div class="container">
-        <lightning-tabset>
+        <lightning-tabset ontabselect={handleTabSelect}>
 
             <!-- LISTINGS tab -->
-            <lightning-tab label="Listings" value="listings">
+            <lightning-tab label="Salesperson Listings" value="listings">
                 <template lwc:if={listingsLoading}>
                     <div class="spinner-wrap">
                         <lightning-spinner alternative-text="Loading…" size="large"></lightning-spinner>
@@ -17,7 +17,7 @@
                 </template>
                 <template lwc:if={listingsUrl}>
                     <iframe title="Listings" src={listingsUrl} class="listing-frame"
-                        sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
                         allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe>
                 </template>
             </lightning-tab>
@@ -37,13 +37,13 @@
                 </template>
                 <template lwc:if={analyticsUrl}>
                     <iframe title="Analytics" src={analyticsUrl} class="listing-frame"
-                        sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
                         allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe>
                 </template>
             </lightning-tab>
 
             <!-- MANAGER tab -->
-            <lightning-tab label="Manager" value="manager">
+            <lightning-tab label="Manager View" value="manager">
                 <template lwc:if={managerLoading}>
                     <div class="spinner-wrap">
                         <lightning-spinner alternative-text="Loading…" size="large"></lightning-spinner>
@@ -57,13 +57,13 @@
                 </template>
                 <template lwc:if={managerUrl}>
                     <iframe title="Manager" src={managerUrl} class="listing-frame"
-                        sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
                         allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe>
                 </template>
             </lightning-tab>
 
             <!-- CREATE LISTING tab — native Salesforce form -->
-            <lightning-tab label="Create Listing" value="create">
+            <lightning-tab label="Listing Generator" value="create">
                 <c-facebook-listing-create></c-facebook-listing-create>
             </lightning-tab>
 

@@ -76,6 +76,10 @@
                         <span class="detail-value">{boatDetails.boatInfo}</span>
                     </div>
                     <div class="detail-item">
+                        <span class="detail-label">Days Listed</span>
+                        <span class="detail-value">{boatDetails.daysListed}</span>
+                    </div>
+                    <div class="detail-item">
                         <span class="detail-label">Stock #</span>
                         <span class="detail-value">{boatDetails.stockNum}</span>
                     </div>
@@ -181,6 +185,55 @@
                 rows="10"
                 onchange={handleListingTextChange}>
             </lightning-textarea>
+        </div>
+
+        <!-- Step 5: Boat photos -->
+        <div class="form-section">
+            <span class="section-label">Boat Photos</span>
+
+            <template lwc:if={hasBoatPhotos}>
+                <div class="photo-toolbar">
+                    <lightning-button
+                        label="Select All"
+                        variant="neutral"
+                        onclick={handleSelectAllPhotos}>
+                    </lightning-button>
+                    <lightning-button
+                        label="Open Selected"
+                        variant="neutral"
+                        disabled={cannotOpenSelectedPhotos}
+                        onclick={handleOpenSelectedPhotos}>
+                    </lightning-button>
+                    <lightning-button
+                        label="Open All"
+                        variant="neutral"
+                        onclick={handleOpenAllPhotos}>
+                    </lightning-button>
+                </div>
+
+                <div class="photo-gallery">
+                    <template for:each={photoItems} for:item="photo">
+                        <div key={photo.id} class="photo-item">
+                            <input
+                                type="checkbox"
+                                class="photo-check"
+                                checked={photo.selected}
+                                data-url={photo.url}
+                                onchange={handlePhotoToggle}
+                                title={photo.checkboxTitle}>
+                            <a href={photo.url} target="_blank" rel="noopener noreferrer" class="photo-thumb-link" title={photo.linkTitle}>
+                                <img src={photo.url} alt={photo.alt} class="photo-thumb">
+                            </a>
+                        </div>
+                    </template>
+                </div>
+            </template>
+            <template lwc:elseif={stockNum}>
+                <div class="photo-empty">No photos found for this unit.</div>
+            </template>
+            <template lwc:else>
+                <div class="photo-empty">Select a boat to load photos.</div>
+            </template>
         </div>
 
         <!-- Error / success banners -->

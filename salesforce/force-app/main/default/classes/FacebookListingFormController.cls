@@ -54,6 +54,25 @@ public with sharing class FacebookListingFormController {
     }
 
     /**
+     * Submits an async generation job that reuses the existing Apps Script generator.
+     */
+    @AuraEnabled(cacheable=false)
+    public static FacebookListingGenerationJobService.SubmitResponse submitGenerateListingJob(
+        String region,
+        Map<String, Object> payload
+    ) {
+        return FacebookListingGenerationJobService.submitJob(region, payload);
+    }
+
+    /**
+     * Returns the current status for an async generation job.
+     */
+    @AuraEnabled(cacheable=false)
+    public static FacebookListingGenerationJobService.StatusResponse getGenerateListingJobStatus(Id jobId) {
+        return FacebookListingGenerationJobService.getJobStatus(jobId);
+    }
+
+    /**
      * Saves the finished listing row to the salesperson's Google Sheet tab.
      * payload keys: salespersonName, stockNum, price, bmbBoard, video, aiListing, link
      */
