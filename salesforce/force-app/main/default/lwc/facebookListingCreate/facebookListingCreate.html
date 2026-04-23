@@ -209,7 +209,28 @@
                         variant="neutral"
                         onclick={handleOpenAllPhotos}>
                     </lightning-button>
+                    <lightning-button
+                        label="Download Selected"
+                        variant="neutral"
+                        icon-name="utility:download"
+                        disabled={cannotDownloadSelectedPhotos}
+                        onclick={handleDownloadSelectedPhotos}>
+                    </lightning-button>
+                    <lightning-button
+                        label="Download All"
+                        variant="neutral"
+                        icon-name="utility:download"
+                        disabled={isDownloadingPhotos}
+                        onclick={handleDownloadAllPhotos}>
+                    </lightning-button>
                 </div>
+
+                <template lwc:if={isDownloadingPhotos}>
+                    <div class="spinner-inline">
+                        <lightning-spinner alternative-text="Preparing download…" size="small"></lightning-spinner>
+                        <span class="spinner-label">Preparing photo download…</span>
+                    </div>
+                </template>
 
                 <div class="photo-gallery">
                     <template for:each={photoItems} for:item="photo">

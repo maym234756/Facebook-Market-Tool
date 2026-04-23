@@ -3,13 +3,8 @@ import getFormData     from '@salesforce/apex/FacebookListingFormController.getF
 import getBoatsByClass from '@salesforce/apex/FacebookListingFormController.getBoatsByClass';
 import getBoatDetails  from '@salesforce/apex/FacebookListingFormController.getBoatDetails';
 import generateListing from '@salesforce/apex/FacebookListingFormController.generateListing';
-import submitGenerateListingJob from '@salesforce/apex/FacebookListingFormController.submitGenerateListingJob';
-import getGenerateListingJobStatus from '@salesforce/apex/FacebookListingFormController.getGenerateListingJobStatus';
 import saveListing     from '@salesforce/apex/FacebookListingFormController.saveListing';
-
-const GENERATE_JOB_POLL_INTERVAL_MS = 3000;
-const GENERATE_JOB_POLL_MAX_ATTEMPTS = 40;
-const USE_ASYNC_GENERATION = true;
+import getPhotoDownloadPayload from '@salesforce/apex/FacebookListingFormController.getPhotoDownloadPayload';
 
 export default class FacebookListingCreate extends LightningElement {
 
@@ -36,13 +31,9 @@ export default class FacebookListingCreate extends LightningElement {
     // ---- UI state ----
     @track isGenerating  = false;
     @track isSaving      = false;
+    @track isDownloadingPhotos = false;
     @track errorMessage  = null;
     @track successMessage = null;
-
-    _activeGenerationJobId = null;
-    _activeGenerationRequestKey = null;
-    _generatePollAttempts = 0;
-    _generatePollTimer = null;
 
     // -----------------------------------------------------------------------
     connectedCallback() {
@@ -172,6 +163,18 @@ export default class FacebookListingCreate extends LightningElement {
         this._openPhotoUrls(this.photoItems.map(photo => photo.url));
     }
 
+    handleDownloadSelectedPhotos() {
+        const urls = this.photoItems.filter(p => p.selected).map(p => p.url);
+        const fileName = (this.stockNum || 'boat') + '-selected-photos.zip';
+        this._downloadPhotosAsZip(urls, fileName);
+    }
+
+    handleDownloadAllPhotos() {
+        const urls = this.photoItems.map(p => p.url);
+        const fileName = (this.stockNum || 'boat') + '-all-photos.zip';
+        this._downloadPhotosAsZip(urls, fileName);
+    }
+
     // -----------------------------------------------------------------------
     // Optional fields
     // -----------------------------------------------------------------------
@@ -192,94 +195,6 @@ export default class FacebookListingCreate extends LightningElement {
 
         const payload = this._buildGeneratePayload();
 
-        if (USE_ASYNC_GENERATION) {
-            this._submitGenerateListingJob(payload);
-            return;
-        }
-
-        this._generateListingSynchronously(payload);
-    }
-
-    _submitGenerateListingJob(payload) {
-        const requestKey = this._buildGenerateRequestKey(payload);
-        this._activeGenerationRequestKey = requestKey;
-
-        submitGenerateListingJob({ region: this.region, payload })
-            .then(result => {
-                if (requestKey !== this._activeGenerationRequestKey) {
-                    return;
-                }
-
-                this._activeGenerationJobId = result.jobId;
-                this._generatePollAttempts = 0;
-                this._startGeneratePolling(requestKey);
-            })
-            .catch(() => {
-                if (requestKey === this._activeGenerationRequestKey) {
-                    this._activeGenerationRequestKey = null;
-                }
-                this._generateListingSynchronously(payload);
-            });
-    }
-
-    _startGeneratePolling(requestKey) {
-        this._stopGeneratePolling();
-        this._pollGenerateJob(requestKey);
-        this._generatePollTimer = window.setInterval(() => {
-            this._pollGenerateJob(requestKey);
-        }, GENERATE_JOB_POLL_INTERVAL_MS);
-    }
-
-    _pollGenerateJob(requestKey) {
-        if (!this._activeGenerationJobId || requestKey !== this._activeGenerationRequestKey) {
-            return;
-        }
-
-        if (this._generatePollAttempts >= GENERATE_JOB_POLL_MAX_ATTEMPTS) {
-            this._cancelActiveGeneration();
-            this.errorMessage = 'Generation is taking longer than expected. Please try again shortly.';
-            return;
-        }
-
-        this._generatePollAttempts += 1;
-
-        getGenerateListingJobStatus({ jobId: this._activeGenerationJobId })
-            .then(result => {
-                if (requestKey !== this._activeGenerationRequestKey) {
-                    return;
-                }
-
-                if (!result || !result.isTerminal) {
-                    return;
-                }
-
-                this._stopGeneratePolling();
-                this.isGenerating = false;
-
-                if (result.status === 'Completed') {
-                    this.aiListing = result.resultText || '';
-                    if (!this.aiListing) {
-                        this.errorMessage = 'Generation completed without listing text.';
-                    }
-                } else {
-                    this.errorMessage = result.errorText || 'Failed to generate listing.';
-                }
-
-                this._activeGenerationJobId = null;
-                this._activeGenerationRequestKey = null;
-                this._generatePollAttempts = 0;
-            })
-            .catch(err => {
-                if (requestKey !== this._activeGenerationRequestKey) {
-                    return;
-                }
-
-                this._cancelActiveGeneration();
-                this.errorMessage = this._extractMessage(err);
-            });
-    }
-
-    _generateListingSynchronously(payload) {
         generateListing({ region: this.region, payload })
             .then(text => {
                 this.aiListing    = text;
@@ -393,6 +308,11 @@ export default class FacebookListingCreate extends LightningElement {
         return !this.photoItems.some(photo => photo.selected);
     }
 
+    get cannotDownloadSelectedPhotos() {
+        return this.isDownloadingPhotos
+            || !this.photoItems.some(photo => photo.selected);
+    }
+
     // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
@@ -429,6 +349,194 @@ export default class FacebookListingCreate extends LightningElement {
             : `Opened ${urls.length} photos.`;
     }
 
+    // -----------------------------------------------------------------------
+    // Photo download (fetches bytes server-side via Apex proxy, assembles a
+    // store-only ZIP client-side, triggers a browser download)
+    // -----------------------------------------------------------------------
+    _downloadPhotosAsZip(urls, zipFileName) {
+        if (!urls || !urls.length) {
+            this.errorMessage = 'No photos selected.';
+            this.successMessage = null;
+            return;
+        }
+
+        this._clearMessages();
+        this.isDownloadingPhotos = true;
+
+        getPhotoDownloadPayload({ urls })
+            .then(files => {
+                const list = Array.isArray(files) ? files : [];
+                if (!list.length) {
+                    this.errorMessage = 'No photos were returned for download.';
+                    return;
+                }
+
+                const valid = list.filter(f => f && !f.error && f.base64);
+                if (!valid.length) {
+                    const firstError = list.find(f => f && f.error);
+                    this.errorMessage = 'Failed to download photos: '
+                        + (firstError ? firstError.error : 'No valid files returned.');
+                    return;
+                }
+
+                const entries = valid.map((f, idx) => ({
+                    name: f.fileName || ('photo-' + (idx + 1)),
+                    bytes: this._base64ToUint8Array(f.base64)
+                }));
+
+                const zipBytes = this._buildStoreZip(entries);
+                const blob = new Blob([zipBytes], { type: 'application/zip' });
+                this._triggerBrowserDownload(blob, zipFileName);
+
+                const failedCount = list.length - valid.length;
+                this.successMessage = failedCount > 0
+                    ? `Download ready. ${failedCount} photo(s) could not be fetched.`
+                    : 'Photo download ready.';
+            })
+            .catch(err => {
+                this.errorMessage = this._extractMessage(err);
+            })
+            .finally(() => {
+                this.isDownloadingPhotos = false;
+            });
+    }
+
+    _base64ToUint8Array(base64) {
+        const binary = atob(String(base64 || ''));
+        const len = binary.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes;
+    }
+
+    _triggerBrowserDownload(blob, fileName) {
+        const objectUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = objectUrl;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    }
+
+    /**
+     * Build a minimal STORE-mode (no compression) ZIP archive from the given
+     * entries. Each entry: { name: String, bytes: Uint8Array }. Store mode is
+     * fine for already-compressed media (JPEG/PNG/WEBP) and avoids pulling in
+     * a third-party compression library via Static Resources.
+     */
+    _buildStoreZip(entries) {
+        const encoder = new TextEncoder();
+        const localParts  = [];
+        const centralParts = [];
+        let offset = 0;
+        const centralRecords = [];
+
+        for (let i = 0; i < entries.length; i++) {
+            const entry = entries[i];
+            const nameBytes = encoder.encode(entry.name);
+            const data = entry.bytes;
+            const crc = this._crc32(data);
+            const size = data.length;
+
+            const localHeader = new Uint8Array(30 + nameBytes.length);
+            const lv = new DataView(localHeader.buffer);
+            lv.setUint32(0,  0x04034b50, true);
+            lv.setUint16(4,  20, true);
+            lv.setUint16(6,  0x0800, true);
+            lv.setUint16(8,  0, true);
+            lv.setUint16(10, 0, true);
+            lv.setUint16(12, 0x0021, true);
+            lv.setUint32(14, crc >>> 0, true);
+            lv.setUint32(18, size, true);
+            lv.setUint32(22, size, true);
+            lv.setUint16(26, nameBytes.length, true);
+            lv.setUint16(28, 0, true);
+            localHeader.set(nameBytes, 30);
+
+            localParts.push(localHeader, data);
+
+            centralRecords.push({ nameBytes, crc, size, offset });
+            offset += localHeader.length + size;
+        }
+
+        const centralStart = offset;
+        for (let i = 0; i < centralRecords.length; i++) {
+            const r = centralRecords[i];
+            const central = new Uint8Array(46 + r.nameBytes.length);
+            const cv = new DataView(central.buffer);
+            cv.setUint32(0,  0x02014b50, true);
+            cv.setUint16(4,  20, true);
+            cv.setUint16(6,  20, true);
+            cv.setUint16(8,  0x0800, true);
+            cv.setUint16(10, 0, true);
+            cv.setUint16(12, 0, true);
+            cv.setUint16(14, 0x0021, true);
+            cv.setUint32(16, r.crc >>> 0, true);
+            cv.setUint32(20, r.size, true);
+            cv.setUint32(24, r.size, true);
+            cv.setUint16(28, r.nameBytes.length, true);
+            cv.setUint16(30, 0, true);
+            cv.setUint16(32, 0, true);
+            cv.setUint16(34, 0, true);
+            cv.setUint16(36, 0, true);
+            cv.setUint32(38, 0, true);
+            cv.setUint32(42, r.offset, true);
+            central.set(r.nameBytes, 46);
+            centralParts.push(central);
+            offset += central.length;
+        }
+        const centralSize = offset - centralStart;
+
+        const eocd = new Uint8Array(22);
+        const ev = new DataView(eocd.buffer);
+        ev.setUint32(0,  0x06054b50, true);
+        ev.setUint16(4,  0, true);
+        ev.setUint16(6,  0, true);
+        ev.setUint16(8,  centralRecords.length, true);
+        ev.setUint16(10, centralRecords.length, true);
+        ev.setUint32(12, centralSize, true);
+        ev.setUint32(16, centralStart, true);
+        ev.setUint16(20, 0, true);
+
+        const total = offset + eocd.length;
+        const out = new Uint8Array(total);
+        let p = 0;
+        for (let i = 0; i < localParts.length; i++) {
+            out.set(localParts[i], p);
+            p += localParts[i].length;
+        }
+        for (let i = 0; i < centralParts.length; i++) {
+            out.set(centralParts[i], p);
+            p += centralParts[i].length;
+        }
+        out.set(eocd, p);
+        return out;
+    }
+
+    _crc32(bytes) {
+        let table = FacebookListingCreate._crcTable;
+        if (!table) {
+            table = new Uint32Array(256);
+            for (let n = 0; n < 256; n++) {
+                let c = n;
+                for (let k = 0; k < 8; k++) {
+                    c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+                }
+                table[n] = c >>> 0;
+            }
+            FacebookListingCreate._crcTable = table;
+        }
+        let crc = 0xffffffff;
+        for (let i = 0; i < bytes.length; i++) {
+            crc = (table[(crc ^ bytes[i]) & 0xff] ^ (crc >>> 8)) >>> 0;
+        }
+        return (crc ^ 0xffffffff) >>> 0;
+    }
+
     _buildGeneratePayload() {
         return {
             salespersonName: this.salespersonName,
@@ -444,27 +552,20 @@ export default class FacebookListingCreate extends LightningElement {
         };
     }
 
-    _buildGenerateRequestKey(payload) {
-        return [
-            this.region,
-            this.stockNum,
-            payload.salespersonName,
-            String(Date.now())
-        ].join(':');
+    _buildGenerateRequestKey() {
+        // Retained as a no-op stub for backward compatibility; the async
+        // generation pipeline was removed pending deployment of its backend
+        // (FacebookListingGenerationJobService + FacebookListingGenerationJob__c).
+        return '';
     }
 
     _stopGeneratePolling() {
-        if (this._generatePollTimer) {
-            window.clearInterval(this._generatePollTimer);
-            this._generatePollTimer = null;
-        }
+        // No-op: async generation disabled.
     }
 
     _cancelActiveGeneration() {
-        this._stopGeneratePolling();
-        this._activeGenerationJobId = null;
-        this._activeGenerationRequestKey = null;
-        this._generatePollAttempts = 0;
+        // No-op: async generation disabled. Generation runs synchronously via
+        // FacebookListingFormController.generateListing.
         this.isGenerating = false;
     }
 

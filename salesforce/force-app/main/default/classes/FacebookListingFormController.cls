@@ -54,30 +54,21 @@ public with sharing class FacebookListingFormController {
     }
 
     /**
-     * Submits an async generation job that reuses the existing Apps Script generator.
-     */
-    @AuraEnabled(cacheable=false)
-    public static FacebookListingGenerationJobService.SubmitResponse submitGenerateListingJob(
-        String region,
-        Map<String, Object> payload
-    ) {
-        return FacebookListingGenerationJobService.submitJob(region, payload);
-    }
-
-    /**
-     * Returns the current status for an async generation job.
-     */
-    @AuraEnabled(cacheable=false)
-    public static FacebookListingGenerationJobService.StatusResponse getGenerateListingJobStatus(Id jobId) {
-        return FacebookListingGenerationJobService.getJobStatus(jobId);
-    }
-
-    /**
      * Saves the finished listing row to the salesperson's Google Sheet tab.
      * payload keys: salespersonName, stockNum, price, bmbBoard, video, aiListing, link
      */
     @AuraEnabled(cacheable=false)
     public static void saveListing(String region, Map<String, Object> payload) {
         FacebookListingCalloutService.saveListing(region, payload);
+    }
+
+    /**
+     * Server-side proxy used by the LWC photo Download buttons. Fetches each
+     * photo URL from an allow-listed CDN and returns per-URL base64 payloads
+     * so the LWC can assemble a ZIP client-side without being blocked by CORS.
+     */
+    @AuraEnabled(cacheable=false)
+    public static List<FacebookListingPhotoProxyService.PhotoResult> getPhotoDownloadPayload(List<String> urls) {
+        return FacebookListingPhotoProxyService.fetchPhotos(urls);
     }
 }

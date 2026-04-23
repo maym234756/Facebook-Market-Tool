@@ -1,0 +1,262 @@
+Apps Script to VS Code to Salesforce Bridge Procedure
+Date: 2026-04-22
+Project: Facebook Listing Tool
+
+Purpose
+This document defines the safest near-term bridge between:
+- Cody developing directly in the Apps Script browser editor
+- VS Code pulling and reconciling those changes locally
+- Salesforce consuming the correct Apps Script deployment without accidental drift
+
+Short Answer
+Yes, this makes sense.
+The correct bridge for now is not a fully automatic push from Apps Script into VS Code and Salesforce.
+The correct bridge for now is a controlled pull-and-promote workflow.
+
+Why this is the right model:
+- Apps Script browser deployments do not natively push source changes into this VS Code repo.
+- Salesforce does not need a metadata deploy every time Apps Script code changes.
+- Salesforce only needs a Custom Setting URL change when the Apps Script deployment URL changes.
+- If the same Apps Script deployment slot is edited, the Salesforce URL can stay the same.
+
+Current Repo Reality
+- VS Code syncs Apps Script source through clasp pull and clasp push.
+- This repo is connected to one Apps Script project.
+- The current VS Code deploy script is pinned to a specific Apps Script deployment slot.
+- Salesforce reads the Apps Script URL from FacebookListingSettings__c.AppsScriptUrl__c.
+- Salesforce also reads the shared secret from FacebookListingSettings__c.EmbedSecret__c.
+
+Most Important Rule
+Salesforce should point to one stable Apps Script deployment slot.
+
+That means:
+- Cody can keep developing in Apps Script.
+- VS Code can keep pulling source and preparing Salesforce updates.
+- Salesforce should not bounce between random Apps Script deployment URLs.
+
+If Cody edits the existing stable deployment:
+- the /exec URL stays the same
+- Salesforce Custom Setting does not need to change
+- Salesforce will pick up the updated Apps Script behavior through the same URL
+
+If Cody creates a brand new deployment:
+- the /exec URL changes
+- Salesforce Custom Setting must be updated if Salesforce should use that new deployment
+
+Recommended Bridge Model
+Use a pull-based release bridge with one stable production slot.
+
+Recommended slot layout:
+1. Apps Script Head
+- Latest code in the Apps Script project
+- Can be changed by Cody in the Apps Script editor or by VS Code push
+
+2. Apps Script Dev or Sandbox deployment
+- Safe place for Cody to test browser-deployed changes without affecting Salesforce production
+- Can be replaced often
+
+3. Apps Script Salesforce Stable deployment
+- The only deployment URL that Salesforce production should use
+- This is the URL stored in FacebookListingSettings__c.AppsScriptUrl__c
+- This slot should be updated intentionally, not replaced casually
+
+Operational Decision
+For now, do not treat Apps Script IDE deploys as automatic Salesforce promotions.
+
+Instead:
+- Cody can deploy in Apps Script
+- VS Code pulls and reconciles the changes
+- A short review decides whether Salesforce needs:
+  - no action
+  - only a Custom Setting URL update
+  - a Salesforce metadata update too
+
+Roles and Responsibilities
+
+Role 1: Cody
+- Can develop in the Apps Script browser editor
+- Can deploy to the Dev or Sandbox slot freely
+- Should only update the Salesforce Stable slot intentionally
+- Should avoid creating random new production deployments unless the URL change is planned
+
+Role 2: VS Code owner
+- Runs clasp pull to sync Cody's Apps Script changes into this repo
+- Reviews what changed
+- Decides whether the change affects only Apps Script or also affects Salesforce metadata
+- Updates documentation, reference snapshots, and release notes
+- Updates the Salesforce Custom Setting only if the stable Apps Script URL changes
+
+Role 3: Salesforce runtime
+- Always points to the single approved stable Apps Script /exec URL
+- Should never point to a /dev URL
+- Should never point to a temporary test deployment
+
+Change Classification Matrix
+
+Case A: Cody changes Apps Script code and edits the existing Salesforce Stable deployment
+- VS Code action: run clasp pull and review the diff
+- Salesforce metadata deploy: not required if Salesforce contract did not change
+- Custom Setting URL update: not required
+- Result: Salesforce sees the updated Apps Script behavior through the same URL
+
+Case B: Cody changes Apps Script code and creates a brand new deployment ID
+- VS Code action: run clasp pull and capture the new deployment URL
+- Salesforce metadata deploy: not required unless the Salesforce-side contract changed
+- Custom Setting URL update: required only if Salesforce should move to that new deployment
+- Result: Salesforce remains on the old deployment until the Custom Setting is updated
+
+Case C: Cody changes Apps Script backend behavior that changes the Salesforce contract
+- Examples:
+  - response shape changes
+  - expected action names change
+  - signed request behavior changes
+  - iframe page assumptions change in a way the LWC depends on
+- VS Code action: run clasp pull, then update Apex or LWC as needed
+- Salesforce metadata deploy: required
+- Custom Setting URL update: only if the stable Apps Script URL changed
+
+Case D: VS Code changes Salesforce-only metadata
+- Examples:
+  - LWC changes
+  - Apex changes
+  - Salesforce custom object or setting changes
+- VS Code action: deploy Salesforce metadata
+- Custom Setting URL update: not required unless Apps Script slot also changed
+
+What Does Not Need To Happen Every Time
+- A Salesforce metadata deploy is not needed for every Apps Script change.
+- A Custom Setting URL update is not needed for every Apps Script deploy.
+- A new Apps Script deployment ID should not be created for every small change.
+
+Best Near-Term Procedure
+
+Phase 1: Cody develops in Apps Script
+1. Cody makes changes in the Apps Script editor.
+2. If the change is experimental, Cody deploys only to the Dev or Sandbox deployment.
+3. If the change is meant for Salesforce live use, Cody should prefer editing the existing Salesforce Stable deployment instead of creating a brand new one.
+4. Cody sends a short release note with:
+- what changed
+- whether the stable slot or only the sandbox slot was updated
+- whether a new deployment ID was created
+- the new /exec URL only if a new deployment was created
+
+Phase 2: VS Code reconciles the change
+1. Run npm.cmd run pull.
+2. Review the pulled src/ changes.
+3. Refresh the local sandbox if needed.
+4. Save a note in the update log or reference folder if the change is important.
+5. Classify the change using the matrix above.
+
+Phase 3: Decide what Salesforce needs
+1. If Cody updated the same stable Apps Script deployment and did not change the Salesforce contract:
+- do not deploy Salesforce metadata
+- do not change the Custom Setting URL
+
+2. If Cody created a new Apps Script deployment and Salesforce should now use it:
+- update FacebookListingSettings__c.AppsScriptUrl__c to the new /exec URL
+- do not change EmbedSecret__c unless the secret itself changed
+
+3. If the Apps Script change requires Salesforce code changes too:
+- update Apex or LWC in VS Code
+- validate locally
+- deploy Salesforce metadata after review
+
+Phase 4: Validate the integrated behavior
+1. Open the Salesforce Facebook Listing tab.
+2. Validate the iframe tabs that depend on Apps Script.
+3. Validate Listing Generator behavior.
+4. Validate save behavior if backend write logic changed.
+5. Validate any specific feature touched by the change.
+
+Custom Setting Rules
+
+AppsScriptUrl__c
+- Update this only when Salesforce should move to a different Apps Script /exec URL.
+- If the stable deployment slot is edited in place, this does not change.
+
+EmbedSecret__c
+- Update this only when the shared secret changes.
+- A normal Apps Script code deployment does not require changing this field.
+
+Important outcome:
+If Cody edits the same stable deployment slot, Salesforce usually does not need any Custom Setting update at all.
+
+Why One Stable Slot Matters
+Without one stable slot:
+- Cody can deploy one URL in Apps Script
+- VS Code can deploy another URL from package.json
+- Salesforce can still point to an older URL in the Custom Setting
+- the repo, the live Apps Script, and Salesforce can all drift apart
+
+With one stable slot:
+- the URL in Salesforce stays predictable
+- VS Code and Apps Script are reconciling around the same target
+- fewer accidental outages happen from deployment URL churn
+
+Recommended Guardrails
+1. Never point Salesforce to a /dev URL.
+2. Never use random one-off production deployment IDs without logging them.
+3. Never assume a new Apps Script IDE deployment automatically means Salesforce should move to it.
+4. Always run clasp pull before making a Salesforce-side change based on Cody's Apps Script update.
+5. Treat the Salesforce Stable deployment as the approved live slot.
+
+Recommended Files To Add Later
+These are not required for the first procedure, but they are the correct next automation pieces.
+
+1. deployment-registry.json
+Purpose:
+- stores script ID
+- stores stable deployment ID
+- stores stable /exec URL
+- stores last known pull time
+- stores last approved promotion note
+
+2. scripts/check-apps-script-bridge.mjs
+Purpose:
+- checks whether the current Apps Script deployment metadata changed
+- compares the current stable slot data against deployment-registry.json
+- tells us whether a Custom Setting update is required
+
+3. apps-script-release-log.txt
+Purpose:
+- one-line release notes for every Apps Script promotion
+- who changed it
+- when it changed
+- whether the stable slot moved
+
+Recommended Future Automation
+After the manual procedure is stable, automate in this order:
+
+Step 1
+- Add deployment-registry.json
+
+Step 2
+- Add a local script that compares the known stable Apps Script deployment against the current Apps Script deployment metadata
+
+Step 3
+- Add a report command that answers:
+  - Did Cody change Apps Script code?
+  - Did the stable slot move?
+  - Does Salesforce need a Custom Setting URL update?
+  - Does Salesforce metadata need review?
+
+Step 4
+- Optionally add a controlled script to update the Salesforce Custom Setting after human approval
+
+What We Should Do Now
+1. Keep one named Salesforce Stable Apps Script deployment.
+2. Let Cody use a separate Apps Script Dev or Sandbox deployment for experimentation.
+3. Require a clasp pull into VS Code after Cody changes Apps Script.
+4. Update Salesforce Custom Setting only when the stable /exec URL changes.
+5. Only deploy Salesforce metadata when the Apps Script change affects Salesforce-native code or contract behavior.
+
+Bottom Line
+The bridge should be pull-based, not fully automatic.
+
+The key design is:
+- one stable Apps Script deployment for Salesforce
+- one dev deployment for experimentation
+- VS Code as the reconciliation and promotion hub
+- Salesforce Custom Setting updated only when the stable deployment URL changes
+
+This gives Cody freedom to work in Apps Script while keeping Salesforce stable and keeping the repo aligned with what is actually live.
