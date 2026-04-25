@@ -1,11 +1,14 @@
 :host {
     display: block;
-    background: linear-gradient(180deg, #061a38 0%, #0b244a 100%);
+    overflow: hidden;
+    background: #061a38;
 }
 
 .container {
     display: flex;
     flex-direction: column;
+    margin: 0;
+    padding: 0;
     background: transparent;
 }
 
@@ -34,27 +37,29 @@
 .listing-frame {
     width: 100%;
     border: none;
-    height: calc(100vh - 330px);
-    border-radius: 8px;
-    margin-top: 12px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.10);
+    height: calc(100vh - 235px);
+    margin-top: 0;
 }
 
-/* ── Mobile ── */
+/* ── Mobile (phone, portrait + landscape) ── */
 @media (max-width: 767px) {
-    :host {
-        height: auto;
+    /* Keep :host height controlled by _sizeFrames() JS so it adapts to
+       both phone portrait and landscape automatically. Do NOT set
+       height: auto here — it would break the dynamic sizing. */
+
+    .container {
+        margin: 0;
+        padding: 0;
     }
 
     .listing-frame {
-        height: calc(100vh - 120px);
-        border-radius: 0;
-        margin-top: 4px;
-        box-shadow: none;
+        margin-top: 0;
     }
 
     .error-box {
         margin: 8px;
         border-radius: 6px;
+        font-size: 12px;
+        padding: 8px 12px;
     }
 }

@@ -1,0 +1,1277 @@
+================================================================================
+  FACEBOOK MARKETPLACE PUSH BUTTON — INTEGRATION BLUEPRINT
+  Salesforce LWC  →  Facebook Graph API  |  2FA, Token Management & Ghost-
+  Listing Prevention
+================================================================================
+  Document scope : facebookListingCreate LWC (Salesforce)
+  Prepared for   : PBC / OMG Facebook Listings Tool
+  Date           : April 22, 2026
+================================================================================
+
+
+TABLE OF CONTENTS
+─────────────────
+  1.  Current Architecture Summary
+  2.  Where the Push Button Lives in the UI
+  3.  High-Level Integration Design
+  4.  Facebook OAuth 2.0 — Account Linking Flow
+  5.  Two-Factor Authentication (2FA) Strategy
+  6.  Salesforce Infrastructure — Named Credentials & Auth Providers
+  7.  Custom Objects & Fields Required
+  8.  Apex Service Layer — FacebookListingPushService
+  9.  LWC Changes — facebookListingCreate
+  10. Facebook Graph API — Marketplace Listing POST
+  11. Ghost Listing Problem — Root Causes
+  12. Ghost Listing Prevention — Technical Controls
+  13. Ghost Listing Prevention — Behavioral Controls
+  14. Monitoring, Alerting & Audit Trail
+  15. Security Checklist (OWASP-aligned)
+  16. Step-by-Step Implementation Roadmap
+  17. Open Questions & Decisions
+
+
+================================================================================
+  SECTION 1 — CURRENT ARCHITECTURE SUMMARY
+================================================================================
+
+The existing tool follows this data flow:
+
+  [Salesforce LWC]
+       │  @AuraEnabled Apex (HTTPS POST, HMAC-signed)
+       ▼
+  [FacebookListingFormController.cls]
+       │  delegates to
+       ▼
+  [FacebookListingCalloutService.cls]
+       │  HMAC-signed POST with 5-min expiry token
+       ▼
+  [Google Apps Script /exec endpoint]
+       │  reads inventory data from Google Sheets
+       │  calls OpenAI API for AI listing text generation
+       ▼
+  [Google Sheets] ← salesperson tab receives saved listing row
+
+Key objects already in place:
+  • FacebookListingSettings__c  — stores AppsScriptUrl__c and EmbedSecret__c
+  • FacebookListingGenerationJob__c  — async generation job queue
+  • facebookListingCreate LWC  — 5-step form: Region → Salesperson → Boat →
+    Optional fields → Generate/Copy/Save
+
+What is NOT yet in place:
+  • A per-salesperson Facebook account link
+  • A "Push to Facebook" button in the LWC
+  • Any Apex service that calls the Facebook Graph API
+  • 2FA / identity verification before pushing
+  • Ghost-listing detection or prevention logic
+
+
+================================================================================
+  SECTION 2 — WHERE THE PUSH BUTTON LIVES IN THE UI
+================================================================================
+
+Inside facebookListingCreate.html the current action row (Step 4) looks like:
+
+    [Generate Listing]  [Copy Listing]  [Save Listing]
+
+After the save-listing call succeeds (successMessage = 'Listing saved…') the
+salesperson has a completed, reviewed AI listing in the textarea. That is the
+correct and ONLY point at which the Push button should become active:
+
+    [Generate Listing]  [Copy Listing]  [Save Listing]  [Push to Facebook ▶]
+
+UI rules for the new button
+  • variant="brand"  with icon-name="utility:upload"
+  • Disabled states:
+      - cannotSave is true (listing not yet complete)
+      - facebookLinked is false (account not yet connected)
+      - isPushing is true (push already in-flight)
+      - pushAlreadySent is true for this stockNum today (de-dup guard)
+  • On click: open a confirmation modal before sending anything to Facebook.
+    The modal shows:
+      - Listing preview (first 300 chars of aiListing)
+      - Which Facebook account will receive the post (linked username / email)
+      - A 2FA verification field (described in Section 5)
+      - [Confirm & Push]  [Cancel]
+
+Account linking is a separate one-time flow, accessible via:
+  • A small "Connect Facebook Account" banner visible when facebookLinked=false
+  • A "Manage Facebook Connection" link in the user's profile / settings tab
+
+
+================================================================================
+  SECTION 3 — HIGH-LEVEL INTEGRATION DESIGN
+================================================================================
+
+Two distinct sub-flows need to be built:
+
+─── SUB-FLOW A: ONE-TIME ACCOUNT LINKING ────────────────────────────────────
+
+  Salesperson (SF User)
+       │  clicks "Connect Facebook Account"
+       ▼
+  [SF Auth Provider — Facebook OAuth 2.0]
+       │  redirects browser to Facebook login + permission grant
+       ▼
+  [Facebook Identity Platform]
+       │  returns code to SF Callback URL
+       ▼
+  [SF Named Credential — per-user token]
+       │  stores encrypted access_token + refresh_token
+       ▼
+  [FacebookUserLink__c record]
+       │  UserId → FacebookUserId + display name + token expiry
+       ▼
+  facebookLinked = true  →  Push button becomes available
+
+─── SUB-FLOW B: PUSH TO FACEBOOK ────────────────────────────────────────────
+
+  Salesperson clicks [Push to Facebook]
+       │
+       ▼  Step 1 — 2FA Verification (Section 5)
+       │  Confirm identity (SF MFA re-prompt OR one-time email code)
+       ▼  Step 2 — LWC calls Apex
+  [FacebookListingPushController.pushListing()] (AuraEnabled)
+       │  validates 2FA token
+       │  reads FacebookUserLink__c for access_token
+       │  checks duplicate push guard (FacebookListingPush__c record)
+       │  validates listing text is non-empty and under 5000 chars
+       ▼
+  [FacebookListingPushService.pushToMarketplace()]
+       │  builds Graph API JSON payload
+       │  POST https://graph.facebook.com/v21.0/{user-id}/marketplace_listings
+       │  (or Commerce Manager catalog item creation if using Business account)
+       ▼
+  [Facebook Graph API] returns { id: "<listing_id>" }
+       │
+       ▼
+  [Apex writes FacebookListingPush__c record]
+       │  Status=Published, ListingId=<id>, PushedAt=now, StockNum, UserId
+       ▼
+  LWC shows success toast: "Listing published to Facebook Marketplace!"
+       │  push button disabled for this stockNum (pushAlreadySent=true)
+       ▼
+  [Apps Script / Google Sheets]  (optional) — update "FB Status" column
+       │  via existing saveListing callout pattern
+
+
+================================================================================
+  SECTION 4 — FACEBOOK OAUTH 2.0 — ACCOUNT LINKING FLOW
+================================================================================
+
+4.1  Required Facebook App Setup
+─────────────────────────────────
+  • Create a Facebook App at developers.facebook.com
+      - App type: "Business"
+      - App category: "Commerce" (required for Marketplace access)
+  • Request these permissions (in App Review):
+      - marketplace_listing_create  — create Marketplace listings
+      - marketplace_listing_manage  — edit / delete
+      - public_profile              — display name, id
+      - email                       — for display in SF
+  • Add Valid OAuth Redirect URIs:
+      - https://<your-sf-domain>.my.salesforce.com/services/authcallback/<ProviderName>
+  • Enable "Advanced Access" for marketplace permissions (requires business
+    verification and App Review submission to Meta)
+
+4.2  Salesforce Auth Provider Configuration
+────────────────────────────────────────────
+  Setup → Auth. Providers → New → Type: OpenID Connect (or custom)
+
+  Field                     Value
+  ─────────────────────────────────────────────────────────────────────
+  Name                      FacebookMarketplace
+  Consumer Key              <App ID from Facebook Developer Console>
+  Consumer Secret           <App Secret — stored in SF Custom Metadata>
+  Authorize Endpoint URL    https://www.facebook.com/v21.0/dialog/oauth
+  Token Endpoint URL        https://graph.facebook.com/v21.0/oauth/access_token
+  Default Scopes            marketplace_listing_create marketplace_listing_manage
+                            public_profile email
+  Send access token in      HTTP Header
+  Callback URL              (auto-generated by Salesforce — copy to FB App)
+
+  Registration Handler: Write a custom Apex class implementing
+  Auth.RegistrationHandler to:
+    a. Look up existing User by Facebook ID (stored in FacebookUserLink__c)
+    b. If found → update token + expiry
+    c. If not found → create FacebookUserLink__c record for existing SF User
+    d. Never create new SF Users from this handler (it is account-linking only)
+
+4.3  Per-User Token Storage
+────────────────────────────
+  Facebook access tokens are long-lived user tokens (~60 days) obtained by
+  exchanging the short-lived token returned from OAuth. The exchange must
+  happen server-side (Apex) immediately after the callback.
+
+  Exchange endpoint:
+    GET https://graph.facebook.com/v21.0/oauth/access_token
+        ?grant_type=fb_exchange_token
+        &client_id={app-id}
+        &client_secret={app-secret}
+        &fb_exchange_token={short-lived-token}
+
+  Storage:
+    • Do NOT store raw tokens in custom fields on User or any readable object.
+    • Use Salesforce Named Credentials (per-user, OAuth 2.0 flow) — SF handles
+      encryption at rest and automatic refresh when the token nears expiry.
+    • The Named Credential references the Auth Provider configured in 4.2.
+    • In Apex, reference it as: 'callout:FacebookMarketplace'
+    • No token value ever touches Apex code as a plain String.
+
+4.4  Token Refresh
+────────────────────
+  Facebook long-lived tokens expire in ~60 days.
+  • On each push attempt Apex should call /debug_token to verify the token
+    is still valid before proceeding.
+  • If expired, surface a toast: "Your Facebook session has expired. Please
+    reconnect your account." with a link to re-trigger the OAuth flow.
+  • A nightly Scheduled Apex job (FacebookTokenRefreshScheduler) should
+    iterate FacebookUserLink__c records where TokenExpiresAt__c < TODAY+7
+    and attempt a refresh, logging failures.
+
+4.5  Unlinking / Revoking Access
+──────────────────────────────────
+  • Salesperson can click "Disconnect Facebook Account" at any time.
+  • Apex must:
+      a. Call DELETE https://graph.facebook.com/v21.0/{user-id}/permissions
+         (revokes app permissions on FB side)
+      b. Delete or blank the FacebookUserLink__c token fields
+      c. Set LinkedStatus__c = 'Revoked'
+
+
+================================================================================
+  SECTION 5 — TWO-FACTOR AUTHENTICATION (2FA) STRATEGY
+================================================================================
+
+"2FA" in this context means two independent identity assertions before a
+listing is published to Facebook on behalf of a salesperson.
+
+Factor 1 — Salesforce Session Integrity
+─────────────────────────────────────────
+  The user is already authenticated to Salesforce with whatever MFA policy the
+  org enforces (TOTP app, SMS, etc.). This is the first factor — it proves the
+  person using the SF UI is the legitimate SF account holder.
+
+  Additional step (high security mode): Before showing the push confirmation
+  modal, silently verify session age using the Auth.SessionManagement API.
+  If the session is older than a configurable threshold (e.g., 4 hours) force
+  a re-authentication challenge before the modal opens.
+
+Factor 2 — Facebook Account Ownership Confirmation
+─────────────────────────────────────────────────────
+  Even with a valid Facebook token in Named Credentials, we want to prevent
+  accidental or unauthorized pushes. Immediately before the Graph API call,
+  require the salesperson to enter a one-time push PIN.
+
+  Option A (Recommended) — Email OTP:
+    a. On modal open, Apex sends a 6-digit OTP to the salesperson's SF/FB
+       email address via Salesforce Messaging.sendEmail().
+    b. OTP is SHA-256 hashed and stored in FacebookPushOTP__c with a 10-minute
+       TTL and the SF UserId.
+    c. Salesperson types the OTP into the modal's confirmation field.
+    d. Apex verifies the hash match and TTL before executing the push.
+    e. OTP record is soft-deleted immediately after use (single-use).
+
+  Option B — Salesperson Acknowledgement PIN:
+    A static 4-6 digit PIN set by the salesperson during account linking,
+    stored as a hashed value (PBKDF2/SHA-256) in FacebookUserLink__c.
+    Lower friction but weaker — pin can be guessed. Use only if email OTP
+    is not acceptable operationally.
+
+  Option C — SF MFA Re-prompt:
+    Use the Salesforce Identity Verification API to issue an in-app MFA
+    challenge tied to the current session. Only feasible if the org uses
+    Salesforce Authenticator or TOTP.
+
+Why 2FA matters here specifically:
+  • A compromised SF session (e.g., unlocked screen) should not be able to
+    silently spam Facebook listings under a salesperson's real FB account.
+  • Facebook account tokens are high-value — they control public-facing posts.
+  • A misdirected push (wrong boat, wrong price) is a reputational risk.
+  • 2FA creates an audit-ready proof that the salesperson explicitly approved
+    each push event.
+
+2FA Bypass Prevention:
+  • Never accept the OTP as a URL parameter or GET argument.
+  • Enforce OTP rate-limiting: max 3 attempts per 10 minutes per UserId.
+    Lock the push capability for 30 minutes after 3 failed attempts and
+    alert the sales manager via an email notification.
+  • OTP values must be generated using Crypto.getRandomInteger() — never
+    Math.random() or sequential counters.
+  • Log every push attempt (successful or failed) in FacebookListingPush__c.
+
+
+================================================================================
+  SECTION 6 — SALESFORCE INFRASTRUCTURE — NAMED CREDENTIALS & AUTH PROVIDERS
+================================================================================
+
+6.1  Remote Site Settings
+──────────────────────────
+  Add to Setup → Remote Site Settings:
+    Name: FacebookGraphAPI
+    URL:  https://graph.facebook.com
+    Active: true
+
+6.2  Named Credentials (Per-User OAuth)
+─────────────────────────────────────────
+  Setup → Named Credentials → New Legacy Named Credential
+    Label:              FacebookMarketplace
+    URL:                https://graph.facebook.com
+    Identity Type:      Per User  ← CRITICAL — each SF user has their own token
+    Authentication Protocol: OAuth 2.0
+    Authentication Provider: FacebookMarketplace (created in Section 4.2)
+    Scope: marketplace_listing_create marketplace_listing_manage public_profile
+
+  In Apex callouts use:
+    HttpRequest req = new HttpRequest();
+    req.setEndpoint('callout:FacebookMarketplace/v21.0/me/marketplace_listings');
+    req.setHeader('Content-Type', 'application/json');
+    req.setMethod('POST');
+
+  The Named Credential automatically injects the Bearer token header.
+  No token string ever appears in Apex source code.
+
+6.3  Custom Metadata — FacebookPushConfig__mdt
+───────────────────────────────────────────────
+  Store environment-specific settings here (not Custom Settings, which are
+  per-org but less auditable):
+
+  Field                       Purpose
+  ─────────────────────────────────────────────────────────────────────
+  FacebookAppId__c            Meta App ID (for debug_token calls)
+  FacebookAppSecret__c        Meta App Secret (encrypted via SF crypto)
+  MaxDailyPushesPerUser__c    Rate limit (default: 10 per user per day)
+  MaxPhotosPerListing__c      Photo count cap (Facebook allows up to 20)
+  ListingTextMaxLength__c     Character cap before push (default: 5000)
+  OtpTtlMinutes__c            OTP expiry window (default: 10)
+  TokenRefreshWarningDays__c  Days before expiry to trigger refresh (7)
+  GhostListingCooldownHours__c Cooldown after a ghost-listing signal (24)
+
+
+================================================================================
+  SECTION 7 — CUSTOM OBJECTS & FIELDS REQUIRED
+================================================================================
+
+7.1  FacebookUserLink__c  (new object)
+────────────────────────────────────────
+  Tracks one record per SF user's Facebook account link.
+
+  Field                   Type      Notes
+  ───────────────────────────────────────────────────────────────────────
+  SalesforceUserId__c     Lookup(User)  ExternalId, unique
+  FacebookUserId__c       Text(50)  ExternalId — FB user ID (numeric string)
+  FacebookDisplayName__c  Text(100) Display name shown in SF UI
+  FacebookEmail__c        Email     Email from FB profile
+  LinkedStatus__c         Picklist  Active / Revoked / Expired / Suspended
+  TokenExpiresAt__c       DateTime  Long-lived token expiry
+  LastPushAt__c           DateTime  Timestamp of most recent successful push
+  DailyPushCount__c       Number    Resets at midnight; enforces rate limit
+  DailyPushResetDate__c   Date      Date of last counter reset
+  PushPinHash__c          Text(128) Salted PBKDF2 hash of PIN (Option B only)
+  AccountTrustScore__c    Number    Internal score (0-100); see Section 12
+
+  Sharing: Private. Only the record owner (salesperson) and their manager
+  (role hierarchy) can read. Admins can read all.
+
+7.2  FacebookListingPush__c  (new object)
+──────────────────────────────────────────
+  Immutable audit log of every push attempt.
+
+  Field                   Type      Notes
+  ───────────────────────────────────────────────────────────────────────
+  SalesforceUserId__c     Lookup(User)
+  StockNum__c             Text(50)
+  ListingText__c          Long Text  Snapshot of the pushed text
+  FacebookListingId__c    Text(50)  ID returned by Graph API
+  Status__c               Picklist  Pushed / Failed / Ghost / Removed
+  AttemptedAt__c          DateTime
+  SucceededAt__c          DateTime
+  ErrorDetail__c          Long Text  Raw API error (if any)
+  GhostDetectedAt__c      DateTime  Populated if ghost signal received
+  OtpUsed__c              Checkbox  Was 2FA OTP verified? (audit flag)
+  IpAddress__c            Text(50)  Originating SF session IP
+
+7.3  FacebookPushOTP__c  (new object)
+───────────────────────────────────────
+  Short-lived OTP records. Field-level security: no profiles can read
+  OtpHash__c except System Administrator.
+
+  Field                   Type      Notes
+  ───────────────────────────────────────────────────────────────────────
+  UserId__c               Lookup(User)  Unique
+  OtpHash__c              Text(128) SHA-256 hash of the 6-digit code
+  ExpiresAt__c            DateTime
+  AttemptCount__c         Number    Increments on each failed verify
+  Used__c                 Checkbox  True once consumed
+  CreatedFromIp__c        Text(50)
+
+
+================================================================================
+  SECTION 8 — APEX SERVICE LAYER — FacebookListingPushService
+================================================================================
+
+8.1  Class Responsibilities
+─────────────────────────────
+  FacebookListingPushController.cls  — AuraEnabled entry points called by LWC
+  FacebookListingPushService.cls     — Business logic, Graph API callout
+  FacebookListingPushOtpService.cls  — OTP generation, delivery, verification
+  FacebookTokenValidatorService.cls  — Calls /debug_token, checks expiry
+  FacebookGhostDetectorService.cls   — Evaluates ghost-listing risk signals
+
+8.2  FacebookListingPushController — Public AuraEnabled API
+────────────────────────────────────────────────────────────
+
+  @AuraEnabled(cacheable=false)
+  public static Map<String,Object> checkFacebookLink()
+    // Returns { linked: true/false, displayName: '...', tokenExpiresAt: '...' }
+    // Used by LWC on load to decide whether to show Push button or link banner.
+
+  @AuraEnabled(cacheable=false)
+  public static void sendPushOtp()
+    // Generates OTP, hashes it, creates FacebookPushOTP__c, sends email.
+    // Called when user opens the push confirmation modal.
+
+  @AuraEnabled(cacheable=false)
+  public static Map<String,Object> pushListing(
+      String stockNum,
+      String listingText,
+      String otpCode,
+      List<String> photoUrls
+  )
+    // Main push entry point.
+    // Returns { success: true, facebookListingId: '...' }
+    //      or { success: false, errorCode: '...', message: '...' }
+
+  @AuraEnabled(cacheable=false)
+  public static void revokeFacebookLink()
+    // Revokes Facebook token and soft-deletes link record.
+
+8.3  FacebookListingPushService — Core Logic (pseudocode)
+──────────────────────────────────────────────────────────
+
+  public static Map<String,Object> pushToMarketplace(
+      String stockNum, String listingText,
+      List<String> photoUrls, Id userId
+  ) {
+
+    // 1. Retrieve link record — throw if not found or not Active
+    FacebookUserLink__c link = [SELECT ... FROM FacebookUserLink__c
+                                WHERE SalesforceUserId__c = :userId LIMIT 1];
+    if (link.LinkedStatus__c != 'Active')
+        throw new AuraHandledException('Facebook account is not linked.');
+
+    // 2. Validate token via Graph API /debug_token
+    FacebookTokenValidatorService.assertValid(link.FacebookUserId__c);
+
+    // 3. Rate-limit check
+    if (link.DailyPushCount__c >= getMaxDailyPushes())
+        throw new AuraHandledException('Daily push limit reached.');
+
+    // 4. Duplicate push guard — no same stockNum pushed in last 24 hours
+    Integer existing = [SELECT COUNT() FROM FacebookListingPush__c
+                        WHERE SalesforceUserId__c = :userId
+                        AND StockNum__c = :stockNum
+                        AND AttemptedAt__c > :Datetime.now().addHours(-24)
+                        AND Status__c = 'Pushed'];
+    if (existing > 0)
+        throw new AuraHandledException('This listing was already pushed today.');
+
+    // 5. Ghost-listing risk evaluation (see Section 12)
+    FacebookGhostDetectorService.checkRisk(link);
+
+    // 6. Build Graph API payload
+    Map<String,Object> fbPayload = new Map<String,Object>{
+        'availability'      => 'IN_STOCK',
+        'category'          => 'BOATS_AND_WATERCRAFT',
+        'currency'          => 'USD',
+        'description'       => listingText,
+        'title'             => buildTitle(stockNum),  // e.g. "2023 Boston Whaler 270 Dauntless"
+        'price'             => getPriceInCents(stockNum),
+        'listing_type'      => 'PRODUCT_ITEM',
+        'condition'         => 'USED_GOOD',
+        'location'          => getLocationForUser(userId)
+    };
+    // Photo attachment handled separately via /photos endpoint → attach IDs
+
+    // 7. POST to Graph API via Named Credential
+    HttpRequest req = new HttpRequest();
+    req.setEndpoint('callout:FacebookMarketplace/v21.0/me/marketplace_listings');
+    req.setMethod('POST');
+    req.setHeader('Content-Type', 'application/json');
+    req.setBody(JSON.serialize(fbPayload));
+    req.setTimeout(30000);
+    Http h = new Http();
+    HttpResponse res = h.send(req);
+
+    if (res.getStatusCode() != 200) {
+        // Write failed push to audit log
+        insertPushRecord(userId, stockNum, listingText, null, 'Failed',
+                         res.getBody());
+        parseFacebookError(res);
+    }
+
+    Map<String,Object> fbResponse = (Map<String,Object>)
+        JSON.deserializeUntyped(res.getBody());
+    String fbListingId = (String) fbResponse.get('id');
+
+    // 8. Write success audit log
+    insertPushRecord(userId, stockNum, listingText, fbListingId, 'Pushed', null);
+
+    // 9. Increment daily push counter
+    link.DailyPushCount__c  = (link.DailyPushCount__c ?? 0) + 1;
+    link.LastPushAt__c      = Datetime.now();
+    update link;
+
+    // 10. (Optional) Notify Apps Script to update Google Sheets FB Status column
+    //     Reuse existing HMAC-signed callout pattern from FacebookListingCalloutService
+
+    return new Map<String,Object>{ 'success' => true, 'facebookListingId' => fbListingId };
+  }
+
+8.4  FacebookListingPushOtpService
+────────────────────────────────────
+
+  public static void generateAndSend(Id userId) {
+      // Generate 6-digit code
+      Integer code = Math.abs(Crypto.getRandomInteger()) mod 1000000;
+      String codeStr = String.valueOf(code).leftPad(6, '0');
+
+      // Hash with a random salt
+      String salt = EncodingUtil.convertToHex(Crypto.generateAesKey(128));
+      String hash = EncodingUtil.convertToHex(
+          Crypto.generateDigest('SHA-256', Blob.valueOf(salt + codeStr))
+      );
+
+      // Upsert OTP record (one per user, overwrite previous)
+      FacebookPushOTP__c otp = new FacebookPushOTP__c(
+          UserId__c       = userId,
+          OtpHash__c      = salt + ':' + hash,
+          ExpiresAt__c    = Datetime.now().addMinutes(10),
+          AttemptCount__c = 0,
+          Used__c         = false
+      );
+      upsert otp UserId__c;
+
+      // Send email — use org-wide address, no plain-text OTP in subject
+      Messaging.SingleEmailMessage mail = new Messaging.SingleEmailMessage();
+      mail.setToAddresses(new List<String>{ getUserEmail(userId) });
+      mail.setSubject('Your Facebook Push Verification Code');
+      mail.setHtmlBody('<p>Your one-time code is: <strong>' + codeStr
+                     + '</strong></p><p>This code expires in 10 minutes.</p>'
+                     + '<p>If you did not request this, contact your manager.</p>');
+      Messaging.sendEmail(new List<Messaging.SingleEmailMessage>{ mail });
+  }
+
+  public static Boolean verify(Id userId, String otpCode) {
+      // Throws on too many attempts or expired
+      FacebookPushOTP__c otp = [SELECT OtpHash__c, ExpiresAt__c,
+                                        AttemptCount__c, Used__c
+                                FROM FacebookPushOTP__c
+                                WHERE UserId__c = :userId LIMIT 1];
+
+      if (otp.Used__c) throw new AuraHandledException('OTP already used.');
+      if (otp.ExpiresAt__c < Datetime.now())
+          throw new AuraHandledException('OTP has expired. Please request a new code.');
+      if (otp.AttemptCount__c >= 3) {
+          // Lock and alert manager
+          lockPushForUser(userId);
+          throw new AuraHandledException('Too many failed attempts. Push locked for 30 minutes.');
+      }
+
+      String[] parts = otp.OtpHash__c.split(':');
+      String salt  = parts[0];
+      String stored = parts[1];
+      String computed = EncodingUtil.convertToHex(
+          Crypto.generateDigest('SHA-256', Blob.valueOf(salt + otpCode))
+      );
+
+      if (computed != stored) {
+          otp.AttemptCount__c++;
+          update otp;
+          throw new AuraHandledException('Invalid code. '
+              + (3 - otp.AttemptCount__c) + ' attempts remaining.');
+      }
+
+      otp.Used__c = true;
+      update otp;
+      return true;
+  }
+
+
+================================================================================
+  SECTION 9 — LWC CHANGES — facebookListingCreate
+================================================================================
+
+9.1  New @track Properties
+────────────────────────────
+  @track facebookLinked       = false;   // from checkFacebookLink()
+  @track fbDisplayName        = '';      // salesperson's FB account name
+  @track fbTokenExpiresAt     = null;    // for expiry warning
+  @track isPushing            = false;
+  @track pushAlreadySent      = false;   // duplicate guard per session
+  @track showPushModal        = false;
+  @track pushOtpCode          = '';
+  @track otpSent              = false;
+  @track pushErrorMessage     = null;
+  @track pushSuccessMessage   = null;
+  @track facebookListingId    = '';
+
+9.2  New Apex Imports
+──────────────────────
+  import checkFacebookLink from '@salesforce/apex/FacebookListingPushController.checkFacebookLink';
+  import sendPushOtp       from '@salesforce/apex/FacebookListingPushController.sendPushOtp';
+  import pushListing       from '@salesforce/apex/FacebookListingPushController.pushListing';
+
+9.3  New Computed Properties
+──────────────────────────────
+  get cannotPush() {
+      return this.cannotSave          // listing must be complete
+          || !this.facebookLinked     // account must be connected
+          || this.isPushing           // no re-entrant pushes
+          || this.pushAlreadySent;    // no duplicate pushes
+  }
+
+  get showTokenExpiryWarning() {
+      if (!this.fbTokenExpiresAt) return false;
+      const expiresMs = new Date(this.fbTokenExpiresAt).getTime();
+      const sevenDays = 7 * 24 * 60 * 60 * 1000;
+      return (expiresMs - Date.now()) < sevenDays;
+  }
+
+9.4  New Handler Methods
+─────────────────────────
+  connectedCallback():
+    After existing _loadFormData() call, also call checkFacebookLink()
+    to hydrate facebookLinked, fbDisplayName, fbTokenExpiresAt.
+
+  handlePushClick():
+    Opens push confirmation modal and calls sendPushOtp() to trigger email OTP.
+
+  handleOtpInput(event):
+    Sets this.pushOtpCode = event.detail.value.
+
+  handleConfirmPush():
+    Validates pushOtpCode is 6 digits, calls pushListing(), handles
+    success/failure states, sets pushAlreadySent=true on success.
+
+  handleCancelPush():
+    Closes modal, clears OTP field.
+
+9.5  New HTML Elements (inside Step 4 form-actions div)
+─────────────────────────────────────────────────────────
+
+  <!-- Facebook account link banner (shown when not linked) -->
+  <template lwc:if={showFbLinkBanner}>
+    <div class="fb-link-banner">
+      <lightning-icon icon-name="utility:warning" size="small"></lightning-icon>
+      Connect your Facebook account to enable Marketplace push.
+      <a href="/apex/FacebookOAuthLaunch">Connect Now</a>
+    </div>
+  </template>
+
+  <!-- Token expiry warning -->
+  <template lwc:if={showTokenExpiryWarning}>
+    <div class="fb-expiry-warning">
+      Your Facebook session expires soon.
+      <a href="/apex/FacebookOAuthLaunch">Re-connect</a>
+    </div>
+  </template>
+
+  <!-- Push button -->
+  <lightning-button
+    label="Push to Facebook"
+    variant="brand"
+    icon-name="utility:upload"
+    disabled={cannotPush}
+    onclick={handlePushClick}>
+  </lightning-button>
+
+  <!-- Push confirmation modal -->
+  <template lwc:if={showPushModal}>
+    <section role="dialog" class="slds-modal slds-fade-in-open">
+      <div class="slds-modal__container">
+        <header class="slds-modal__header">
+          <h2>Confirm Facebook Push</h2>
+        </header>
+        <div class="slds-modal__content slds-p-around_medium">
+          <p>Posting as: <strong>{fbDisplayName}</strong></p>
+          <p>Listing preview:</p>
+          <blockquote class="listing-preview">{listingPreview}</blockquote>
+          <template lwc:if={otpSent}>
+            <lightning-input
+              label="Enter 6-digit verification code sent to your email"
+              type="text"
+              max-length="6"
+              value={pushOtpCode}
+              onchange={handleOtpInput}>
+            </lightning-input>
+          </template>
+          <template lwc:if={pushErrorMessage}>
+            <p class="error-text">{pushErrorMessage}</p>
+          </template>
+        </div>
+        <footer class="slds-modal__footer">
+          <lightning-button label="Cancel" onclick={handleCancelPush}></lightning-button>
+          <lightning-button
+            label="Confirm & Push"
+            variant="brand"
+            disabled={isPushing}
+            onclick={handleConfirmPush}>
+          </lightning-button>
+        </footer>
+      </div>
+    </section>
+    <div class="slds-backdrop slds-backdrop_open"></div>
+  </template>
+
+
+================================================================================
+  SECTION 10 — FACEBOOK GRAPH API — MARKETPLACE LISTING POST
+================================================================================
+
+10.1  Endpoint
+───────────────
+  POST https://graph.facebook.com/v21.0/{facebook-user-id}/marketplace_listings
+
+  Authentication: Bearer {user-access-token}  (injected by Named Credential)
+
+  Note: As of 2025, personal Marketplace posting via Graph API requires
+  marketplace_listing_create permission AND Business Verification on the
+  developer app. Standard access is rate-limited to 200 posts/day per user.
+
+10.2  Request Payload
+──────────────────────
+  {
+    "title":          "2023 Yamaha F150 Outboard — 150HP",
+    "description":    "<ai-generated listing text, max 5000 chars>",
+    "price":          2499900,          // cents — e.g. $24,999
+    "currency":       "USD",
+    "category":       "BOATS_AND_WATERCRAFT",
+    "condition":      "USED_GOOD",      // or USED_FAIR / NEW
+    "availability":   "IN_STOCK",
+    "location":       {
+      "latitude":  30.2672,
+      "longitude": -97.7431
+    },
+    "attached_media": [                 // up to 20 images
+      { "media_fbid": "<photo-id-1>" },
+      { "media_fbid": "<photo-id-2>" }
+    ]
+  }
+
+  Photo upload (separate step before listing creation):
+    POST https://graph.facebook.com/v21.0/me/photos
+    Body: { "url": "<publicly-accessible-photo-url>", "published": false }
+    Returns: { "id": "<photo-id>" }
+    → Collect all photo IDs, then include them in attached_media above.
+
+    OR use multipart/form-data with the binary image bytes via a staging
+    endpoint if your CDN URLs are not publicly reachable.
+
+10.3  Response Handling
+────────────────────────
+  Success: HTTP 200  { "id": "123456789012345_987654321098765" }
+  Error examples:
+    190  — Invalid or expired token         → trigger re-link flow
+    368  — Account temporarily blocked       → ghost/spam signal; back off
+    100  — Invalid parameter                 → log and alert developer
+    4    — Application request limit hit     → rate limit; back off and retry
+    200  — Permissions error                 → re-request permissions
+
+  All Graph API errors should be parsed and surfaced as user-friendly
+  messages in the LWC rather than raw JSON error codes.
+
+10.4  Idempotency Guard
+────────────────────────
+  Facebook does not guarantee idempotent listing creation. If an HTTP timeout
+  occurs, do NOT auto-retry. Instead:
+    a. Write a FacebookListingPush__c record with Status='Pending'
+    b. Surface a message: "Push may have succeeded — please check your
+       Facebook Marketplace before trying again."
+    c. Allow the user to manually resolve (check FB, then mark as resolved).
+
+
+================================================================================
+  SECTION 11 — GHOST LISTING PROBLEM — ROOT CAUSES
+================================================================================
+
+A "ghost listing" is a Facebook Marketplace listing that:
+  • Posts successfully (no API error returned)
+  • Appears in the seller's own "Your Listings" view
+  • Receives ZERO impressions or views from buyers
+  • Does not appear in Marketplace search results or category feeds
+  • Cannot be discovered by anyone except the poster via direct link
+
+This is distinct from a removed listing. The listing exists but is effectively
+invisible — hence "ghost."
+
+11.1  Facebook-Side Causes
+───────────────────────────
+  a. New account trust deficit
+     Facebook Marketplace ranks older, more established accounts higher.
+     Accounts under 30 days old or with sparse activity are shadow-filtered.
+
+  b. Posting frequency / velocity signals
+     Posting multiple identical or near-identical listings in a short window
+     triggers the spam classifier. Facebook's ML monitors:
+       - Same title/description across listings
+       - Same price across multiple rapid posts
+       - Same photos reused across listings
+       - Multiple posts within minutes of each other
+
+  c. Account-level spam score
+     Each FB account accumulates a silent trust score. Negative signals:
+       - Previously removed listings
+       - User reports on old listings
+       - Unusual login patterns (new IP, new device)
+       - Posting from a programmatic/API context without sufficient human signals
+
+  d. IP address reputation
+     Salesforce server IPs are datacenter IPs. Facebook can detect that a
+     listing was created from a non-residential, non-mobile IP and apply
+     lower trust to the listing. This is the most significant risk when
+     pushing via the Graph API from Apex (server-side callout).
+
+  e. Identical / template listing content
+     If 10 salespeople all post listings with the same AI template and only
+     swap the boat name, the content similarity score will be high.
+
+  f. No engagement history on the listing
+     New listings from low-trust accounts with no prior engagement (no saves,
+     no messages) can be progressively down-ranked over time.
+
+  g. Category mismatch or incomplete fields
+     Listings in wrong categories or with missing required fields (price,
+     location, photos) can be filtered from results.
+
+  h. API vs. human posting fingerprinting
+     Facebook differentiates between actions taken via API (programmatic
+     access) and actions taken through the mobile/web UI. API-created listings
+     from new or low-trust apps may receive lower initial visibility until
+     the app accumulates sufficient trust on the developer platform.
+
+
+================================================================================
+  SECTION 12 — GHOST LISTING PREVENTION — TECHNICAL CONTROLS
+================================================================================
+
+12.1  Content Uniqueness (Already Partly Solved)
+──────────────────────────────────────────────────
+  The AI-generated listing text via OpenAI is the strongest existing control.
+  Each listing gets a unique description tailored to the specific boat, which
+  significantly reduces content-fingerprint collisions.
+
+  Additional controls:
+    a. Enforce that listingText is unique across the last 30 days before push.
+       Use a rough hash comparison: if Levenshtein similarity > 85% against any
+       recent push in FacebookListingPush__c, warn the salesperson and suggest
+       regenerating the text.
+
+    b. Include the salesperson's name naturally in the listing text (the current
+       AI prompt already requests this — maintain it).
+
+    c. Vary the title format slightly. Do not use a rigid template title like
+       "2023 Yamaha F150 — FOR SALE" for every listing. Let the AI generate
+       the title from the listing content.
+
+12.2  Rate Limiting
+────────────────────
+  Implement at the Apex layer, not just relying on Facebook limits:
+
+  Per-salesperson daily limit (FacebookPushConfig__mdt.MaxDailyPushesPerUser__c):
+    Default: 5 listings per salesperson per calendar day.
+    Configurable per region. Track in FacebookUserLink__c.DailyPushCount__c.
+
+  Minimum time between pushes:
+    Enforce a 30-minute minimum gap between any two pushes from the same
+    salesperson. Check LastPushAt__c before proceeding.
+    Surface: "Please wait {X} minutes before pushing another listing."
+
+  Org-wide daily push cap:
+    A separate FacebookOrgPushLimit__c counter ensures no more than N total
+    pushes per day across all users (to protect shared app-level API quotas).
+
+12.3  Photo Quality Controls
+──────────────────────────────
+  Listings without photos receive near-zero visibility on Marketplace.
+
+  Enforce in Apex before push:
+    - Minimum 1 photo required (hard block)
+    - Recommend 5+ photos (soft warning)
+    - Photos must resolve to a valid HTTPS URL (validate in Apex)
+    - Check content-type header confirms image/jpeg or image/png
+
+  Use existing getPhotoDownloadPayload() infrastructure — the CDN URLs already
+  available in boatDetails.photos are your source. Proxy them through
+  FacebookListingPhotoProxyService (already built) to avoid CORS and to
+  validate that each URL returns a real image before submitting to Facebook.
+
+12.4  Location Data
+────────────────────
+  Facebook ranks local listings higher. Always include the dealership location
+  (latitude/longitude) in the payload. Store per-region coordinates in
+  FacebookListingSettings__c or a new FacebookRegionLocation__mdt:
+
+    Region        Lat         Lon
+    ────────────────────────────────────
+    SE Texas      30.0        -95.3
+    (add others as regions expand)
+
+  Never use 0,0 as a default — this is the null island fallback and signals
+  a malformed or bot-generated listing.
+
+12.5  Account Age Gating
+─────────────────────────
+  During the OAuth account-link flow, call:
+    GET https://graph.facebook.com/v21.0/me?fields=id,name,about
+
+  Store the profile's account creation metadata if available, and flag
+  accounts that appear to be newly created. For new accounts (heuristic:
+  no prior posts, profile photo recently changed), display a warning:
+  "Your Facebook account may need more activity before Marketplace listings
+  are visible to buyers. Consider building your account presence first."
+
+12.6  Avoiding API-Origin Fingerprinting
+──────────────────────────────────────────
+  This is the hardest problem when pushing server-side (Apex callout).
+
+  Mitigation strategies:
+    a. Use the Facebook Marketing API via a Business Manager account connected
+       to the salesperson's personal account. This pathway has more established
+       trust with Facebook's systems for programmatic posting.
+
+    b. Alternatively, implement a client-side OAuth token flow where the
+       BROWSER (LWC in Salesforce) handles the initial auth and token
+       exchange, and the Apex layer only receives the final long-lived token.
+       This means the token was originally issued to a real browser session.
+
+    c. Ensure the Facebook App used for API access has been through App Review
+       and has "Advanced Access" for marketplace permissions — this is a
+       significant trust signal on Meta's side.
+
+    d. Register the Salesforce IP ranges with Meta's allow-list if available
+       through the Business Platform developer agreement.
+
+12.7  Monitoring for Ghost Listings
+─────────────────────────────────────
+  After a listing is pushed, use the Facebook Graph API to check listing
+  visibility metrics:
+
+    GET https://graph.facebook.com/v21.0/{listing-id}/insights
+        ?fields=total_impressions,total_reach
+
+  Schedule an Apex job (FacebookListingHealthCheckScheduler) to run 2 hours
+  and 24 hours after each push and fetch impression counts. Store results in
+  FacebookListingPush__c.ImpressionCount__c.
+
+  Ghost signal threshold:
+    If total_impressions == 0 after 24 hours → set Status='Ghost' on the
+    push record and notify the salesperson and manager with next steps:
+      1. Consider rephrasing and re-posting manually from the Facebook mobile app
+      2. Review account trust (any community standards violations?)
+      3. Check that the listing category and photos are correct
+
+
+================================================================================
+  SECTION 13 — GHOST LISTING PREVENTION — BEHAVIORAL CONTROLS
+================================================================================
+
+These are operational practices that salespeople and managers should follow:
+
+13.1  Account Health Hygiene
+──────────────────────────────
+  • Salespeople must use a real, personal Facebook account — not a newly
+    created throwaway. Accounts should have: a profile photo, some friend
+    connections, and prior Marketplace or post activity.
+
+  • Do not post from a brand-new account. Facebook requires account age and
+    a basic social graph before Marketplace listings gain visibility.
+
+  • Avoid having the same salesperson log into Facebook from many different
+    IP addresses or devices in the same day — this triggers suspicious login
+    detection which can reduce listing trust.
+
+13.2  Listing Content Best Practices
+──────────────────────────────────────
+  • Always include a price. Listings marked "Price negotiable" with no amount
+    are filtered lower in many regional Marketplace feeds.
+
+  • Never copy-paste a listing from the web (another site's description).
+    AI-generated text is the right approach because it creates content that
+    has never appeared before on the internet.
+
+  • Include the dealer location city/state naturally in the description.
+    "Located at Premier Boating Centers in [City], TX" adds location context
+    that improves local search ranking.
+
+  • Post during peak Marketplace browsing hours (evenings 6–9 PM local time,
+    weekends). Consider implementing a scheduled-push option in the UI:
+    "Post now" vs. "Schedule for tonight 7 PM."
+
+13.3  Engagement Follow-Through
+─────────────────────────────────
+  • Respond promptly to any buyer inquiries received via Facebook Messenger.
+    Listings from sellers who respond quickly receive a "Typically responds
+    within an hour" badge which dramatically improves trust and visibility.
+
+  • Never immediately edit a new listing's price within the first 30 minutes
+    of posting — this can trigger the spam classifier.
+
+  • If a listing is ghosted, do not simply delete and repost it with identical
+    content. Change at least the title, description, and if possible upload
+    different (additional) photos.
+
+13.4  Avoid Simultaneous Bulk Posting
+───────────────────────────────────────
+  • Do not allow all salespeople at the same dealership to push listings at
+    the same time (e.g., all clicking "Push to Facebook" at a morning meeting).
+  • The Apex rate limiter (Section 12.2) helps but also train managers:
+    stagger posts throughout the day for best visibility.
+  • The system could implement a queue with a configurable stagger delay
+    (e.g., no two pushes from the same org IP within 5 minutes).
+
+
+================================================================================
+  SECTION 14 — MONITORING, ALERTING & AUDIT TRAIL
+================================================================================
+
+14.1  Salesforce Reports & Dashboards
+───────────────────────────────────────
+  Build these standard reports on FacebookListingPush__c:
+
+  Report: "Push Activity — Last 30 Days"
+    Columns: Salesperson, Stock#, Status, AttemptedAt, FacebookListingId,
+             ImpressionCount
+    Grouped by: Status (Pushed / Failed / Ghost / Removed)
+
+  Report: "Ghost Listings by Salesperson"
+    Filter: Status = 'Ghost' AND AttemptedAt = LAST_N_DAYS:30
+    Useful for coaching salespeople whose accounts have trust issues.
+
+  Report: "Failed Pushes — Error Details"
+    Filter: Status = 'Failed' AND AttemptedAt = TODAY
+    Escalation trigger: more than 3 failures in one day → admin alert.
+
+  Dashboard tiles:
+    - Total listings pushed this month
+    - Ghost listing rate (%) this month
+    - Average impression count at 24h
+    - Accounts with expiring tokens
+
+14.2  Automated Alerts
+───────────────────────
+  Implement Process Builder or Flow on FacebookListingPush__c:
+    • When Status changes to 'Ghost' → notify salesperson by email/Chatter
+    • When Status changes to 'Failed' (3rd time same day) → notify admin
+    • When FacebookUserLink__c.TokenExpiresAt__c = TODAY+7 → email salesperson
+
+14.3  Audit Trail Completeness
+────────────────────────────────
+  Every FacebookListingPush__c record captures:
+    ✓ Who pushed (UserId)
+    ✓ What was pushed (ListingText snapshot, StockNum)
+    ✓ When (AttemptedAt, SucceededAt)
+    ✓ Whether 2FA was used (OtpUsed__c)
+    ✓ The originating IP (IpAddress__c — from UserInfo.getSessionId() or
+      System.currentPageReference().getParameters())
+    ✓ The Facebook listing ID returned (FacebookListingId__c)
+    ✓ The outcome (Status, ErrorDetail)
+
+  This audit trail satisfies:
+    - Internal investigation of misposted listings
+    - Facebook's API data usage transparency requirements
+    - Potential compliance asks if a listing is disputed
+
+
+================================================================================
+  SECTION 15 — SECURITY CHECKLIST (OWASP-ALIGNED)
+================================================================================
+
+  OWASP Category              Control Applied
+  ─────────────────────────────────────────────────────────────────────────────
+  A01 Broken Access Control   FacebookListingPush__c uses "with sharing" classes.
+                              Job ownership verified before status query.
+                              FacebookUserLink__c only readable by owner + manager.
+                              AuraEnabled methods validate UserInfo.getUserId()
+                              against record owner before any mutation.
+
+  A02 Cryptographic Failures  Facebook access tokens NEVER stored as plaintext.
+                              Named Credentials handle all token storage with
+                              SF encryption at rest (AES-256).
+                              OTP values are SHA-256 hashed with random salt
+                              before storage — never stored in plaintext.
+                              App Secret stored in Custom Metadata (encrypted
+                              field) or SF Secrets (if available in the org).
+
+  A03 Injection               All Graph API payloads built via JSON.serialize()
+                              — never string concatenation.
+                              All Apex SOQL uses bind variables (:variable).
+                              LWC inputs validated for type and length before
+                              Apex callout (6-digit OTP pattern enforced client
+                              side and server side).
+
+  A04 Insecure Design         2FA required before every push (Section 5).
+                              Duplicate push guard prevents re-submissions.
+                              Rate limiting at Apex layer prevents abuse.
+                              Minimum 30 min gap between pushes.
+                              Token expiry checked before every push attempt.
+
+  A05 Security Misconfiguration  Remote Site Settings scoped to graph.facebook.com.
+                              Named Credential uses Per User identity — no
+                              shared service account token.
+                              Custom Metadata app secret field marked as
+                              Protected (cannot be read by non-admin Apex).
+
+  A06 Vulnerable Components   Graph API version pinned to v21.0 in all
+                              endpoint strings — update annually after testing.
+                              Named Credential does not expose raw token to
+                              Apex; any token logging would only show "****".
+
+  A07 Auth Failures           OTP: 3-attempt lockout, 10-min TTL, single-use.
+                              Session age validation before modal open.
+                              Re-auth required after 4-hour session threshold.
+
+  A08 Software & Data Integrity  HMAC-signed callouts (already in place) for
+                              Apps Script. Apply same pattern for any
+                              server-to-server leg added.
+
+  A09 Security Logging        Every push attempt (success/fail) logged to
+                              FacebookListingPush__c with IP, user, outcome,
+                              and OTP usage flag.
+                              OTP generation and verification events logged
+                              in FacebookPushOTP__c with timestamp + IP.
+
+  A10 Server-Side Request Forgery  Photo proxy already uses allow-listed CDN
+                              URLs (FacebookListingPhotoProxyService).
+                              Extend same allow-list to photo URLs submitted
+                              for Facebook upload — reject any non-CDN host.
+                              Named Credential endpoint is fixed to
+                              graph.facebook.com — no dynamic URL injection.
+
+
+================================================================================
+  SECTION 16 — STEP-BY-STEP IMPLEMENTATION ROADMAP
+================================================================================
+
+Phase 1 — Foundation (Week 1–2)
+────────────────────────────────
+  □ Create Facebook Developer App (Business type, Commerce category)
+  □ Submit for App Review — marketplace_listing_create permission
+     (Note: App Review can take 2–4 weeks; start early)
+  □ Create Remote Site Setting: FacebookGraphAPI
+  □ Create Auth Provider: FacebookMarketplace (Setup → Auth. Providers)
+  □ Create Named Credential: FacebookMarketplace (Per User, OAuth 2.0)
+  □ Deploy custom objects: FacebookUserLink__c, FacebookListingPush__c,
+    FacebookPushOTP__c
+  □ Deploy Custom Metadata: FacebookPushConfig__mdt with default values
+
+Phase 2 — Backend Services (Week 2–3)
+───────────────────────────────────────
+  □ Write FacebookListingPushOtpService.cls (generate, send, verify)
+  □ Write FacebookTokenValidatorService.cls (/debug_token check)
+  □ Write FacebookListingPushService.cls (core push logic + audit log)
+  □ Write FacebookListingPushController.cls (AuraEnabled entry points)
+  □ Write FacebookTokenRefreshScheduler.cls (nightly token refresh job)
+  □ Write FacebookListingHealthCheckScheduler.cls (impression monitoring)
+  □ Write Auth Provider Registration Handler Apex class
+  □ Write unit tests for all services (target 85%+ coverage)
+
+Phase 3 — OAuth Account Linking UI (Week 3)
+─────────────────────────────────────────────
+  □ Create a Visualforce page (FacebookOAuthLaunch) that initiates the
+    Named Credential Per-User OAuth flow for the current user
+  □ Build the Registration Handler to create/update FacebookUserLink__c
+  □ Confirm the callback URL in the Facebook App matches the SF auth callback
+  □ Test the full OAuth round-trip in a sandbox with a real Facebook account
+
+Phase 4 — LWC Updates (Week 3–4)
+──────────────────────────────────
+  □ Add checkFacebookLink() call to connectedCallback
+  □ Add "Connect Facebook Account" banner (shows when not linked)
+  □ Add "Token expiry" warning banner
+  □ Add Push to Facebook button to action row (disabled states per Section 9.3)
+  □ Build push confirmation modal with OTP input field
+  □ Wire all new handler methods (handlePushClick, handleOtpInput,
+    handleConfirmPush, handleCancelPush)
+  □ Handle all error states (expired token, locked OTP, ghost signal warning)
+
+Phase 5 — Testing (Week 4–5)
+──────────────────────────────
+  □ Unit test: OTP generation entropy (verify Crypto.getRandomInteger())
+  □ Unit test: OTP verification — correct code, wrong code, expired, used
+  □ Unit test: Push service — success path, duplicate guard, rate limit
+  □ Unit test: Ghost listing health check scheduler
+  □ Integration test in sandbox: full OAuth link → push → impression check
+  □ Security review: OWASP checklist walkthrough with a second developer
+  □ User acceptance testing with 2-3 salespeople in sandbox
+
+Phase 6 — Deployment & Training (Week 5–6)
+────────────────────────────────────────────
+  □ Deploy all components to production via change set or SFDX
+  □ Update FacebookListingSettings__c in production with production FB App ID
+  □ Sales team training: how to connect their Facebook account (one-time)
+  □ Manager training: how to read the Ghost Listing and Push Activity reports
+  □ Create a "What to do if your listing is ghosted" cheat sheet for salespeople
+  □ Establish monitoring cadence: review dashboard weekly for first month
+
+
+================================================================================
+  SECTION 17 — OPEN QUESTIONS & DECISIONS
+================================================================================
+
+  1. PERSONAL vs. BUSINESS ACCOUNT POSTING
+     Should listings be posted to each salesperson's personal Facebook account,
+     or to a shared Business Page / Catalog? Personal account posting has higher
+     local trust and buyer engagement but puts the push on the individual's
+     account. Business Page posting is more controlled but may feel less
+     personal to buyers browsing Marketplace.
+     RECOMMENDATION: Personal account per salesperson, with a Business Manager
+     connection to the shared developer app.
+
+  2. APP REVIEW TIMELINE
+     Meta App Review for marketplace_listing_create can take 2–6 weeks.
+     Plan for this in the project timeline. During review, only test accounts
+     added to the app as developers/testers can use the push feature.
+
+  3. PHOTO UPLOAD STRATEGY
+     Option A: Upload photos to Facebook via URL (simpler, requires CDN URLs
+     to be publicly accessible).
+     Option B: Upload via binary multipart (more reliable but requires streaming
+     photo bytes through Apex — higher callout timeout risk).
+     RECOMMENDATION: Start with URL-based upload since the CDN URLs are already
+     accessible via the existing photo proxy infrastructure.
+
+  4. SCHEDULED PUSH
+     Should salespeople be able to schedule a push for a future time (e.g.,
+     "Post tonight at 7 PM") rather than posting immediately?
+     This would dramatically improve listing visibility if posts are timed to
+     peak browsing hours. Would require a scheduled Apex job queue.
+     RECOMMENDATION: Include as Phase 2 enhancement after initial launch.
+
+  5. LISTING EDITING & REMOVAL
+     Once a listing is pushed, should the tool allow salespeople to:
+       a. Edit the listing on Facebook (update price, text)?
+       b. Remove it when the boat sells?
+     Both are supported via Graph API (PATCH and DELETE endpoints).
+     RECOMMENDATION: Add a "Mark as Sold / Remove from FB" button as a follow-up
+     feature. Map to FacebookListingPush__c Status='Removed'.
+
+  6. GHOST LISTING THRESHOLD
+     The 0-impressions-in-24h ghost signal is an aggressive threshold.
+     Calibrate this after observing real post data — some legitimate listings
+     in low-traffic regions may take longer to receive initial impressions.
+     RECOMMENDATION: Set the initial threshold at 0 impressions in 48 hours
+     and refine based on actual baseline data after the first month.
+
+  7. SALESPERSON ONBOARDING
+     Requiring every salesperson to connect their personal Facebook account
+     raises privacy considerations. Some employees may not want to use a
+     personal account for work purposes.
+     RECOMMENDATION: Document clearly in the onboarding flow that the app
+     only receives permission to create/manage Marketplace listings — it cannot
+     read messages, posts, friends, or other personal data. Show the exact
+     permissions being requested on the consent screen.
+
+
+================================================================================
+  END OF DOCUMENT
+================================================================================

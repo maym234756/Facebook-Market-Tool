@@ -30,9 +30,9 @@
 
       body {
         font-family: "Segoe UI", Arial, sans-serif;
-        background: linear-gradient(180deg, var(--navy-900) 0%, #0b244a 100%);
+        background: #061a38;
         margin: 0;
-        padding: 12px;
+        padding: 10px;
         color: var(--text-dark);
       }
 
@@ -334,6 +334,62 @@
 
         .photo-toolbar button {
           width: 100%;
+        }
+      }
+
+      /* ── Phone (portrait + landscape) ── */
+      /* Landscape phones often have width 812-932 (above 767), so we also
+         trigger this block on short viewports via (max-height: 500px). */
+      @media (max-width: 767px), (max-height: 500px) {
+        body {
+          padding: 4px;
+        }
+
+        .brand-header {
+          padding: 6px 10px;
+          margin-bottom: 6px;
+          border-radius: 12px;
+        }
+
+        .brand-header-inner {
+          gap: 4px;
+        }
+
+        .brand-logo-left,
+        .brand-logo-right {
+          min-height: 32px;
+        }
+
+        .brand-logo-left img,
+        .brand-logo-right img {
+          max-height: 32px;
+        }
+
+        .brand-title {
+          font-size: 18px;
+          line-height: 1.15;
+        }
+
+        .brand-subtitle {
+          font-size: 11px;
+        }
+
+        .card {
+          padding: 8px;
+          margin-bottom: 6px;
+          border-radius: 12px;
+        }
+      }
+
+      /* ── Very narrow phones: hide side logos for max title room ── */
+      @media (max-width: 480px), (max-height: 450px) {
+        .brand-logo-left,
+        .brand-logo-right {
+          display: none;
+        }
+
+        .brand-title {
+          font-size: 16px;
         }
       }
     </style>

@@ -29,7 +29,7 @@ public with sharing class FacebookListingGenerationJobService {
             Status__c = 'Queued',
             Region__c = normalizedRegion,
             PayloadJson__c = JSON.serialize(payload),
-            CorrelationId__c = createCorrelationId_()
+            CorrelationId__c = createCorrelationId()
         );
         insert job;
 
@@ -69,7 +69,7 @@ public with sharing class FacebookListingGenerationJobService {
     }
 
     @TestVisible
-    private static String createCorrelationId_() {
+    private static String createCorrelationId() {
         Blob seed = Blob.valueOf(
             UserInfo.getUserId() + ':'
             + String.valueOf(Datetime.now().getTime()) + ':'

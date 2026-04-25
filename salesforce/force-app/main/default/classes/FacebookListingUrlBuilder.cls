@@ -13,8 +13,10 @@
  */
 public with sharing class FacebookListingUrlBuilder {
 
-    /** Token valid for 5 minutes (300 000 ms). */
-    private static final Long TOKEN_TTL_MS = 300000L;
+    /** Token valid for 8 hours (28 800 000 ms). Long TTL avoids forced
+     *  iframe reloads mid-session — assigning a new src always navigates
+     *  the iframe, so we issue a single long-lived token at page load. */
+    private static final Long TOKEN_TTL_MS = 28800000L;
 
     /**
      * Returns a fully-qualified, signed Apps Script URL for the given page

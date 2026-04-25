@@ -10,7 +10,7 @@
     <enableReports>false</enableReports>
     <enableSearch>true</enableSearch>
     <enableSharing>true</enableSharing>
-    <enableStreamingApi>false</enableStreamingApi>
+    <enableStreamingApi>true</enableStreamingApi>
     <label>Facebook Listing Generation Job</label>
     <nameField>
         <displayFormat>GLJ-{000000}</displayFormat>

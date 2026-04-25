@@ -1,0 +1,568 @@
+================================================================================
+  FACEBOOK LISTING TOOL — BUG FIX LOG V1
+  Session Date: April 24, 2026
+================================================================================
+
+--------------------------------------------------------------------------------
+BUG #1 — Outer Page Vertical Scroll (Salesforce Layout)
+--------------------------------------------------------------------------------
+ORIGINAL PROBLEM:
+  The Facebook Listing tab in Salesforce had a visible outer page scrollbar.
+  The entire Lightning page would scroll up and down, even though the content
+  inside the iframe had its own scroll. Users would accidentally scroll the
+  outer page instead of the table.
+
+ROOT CAUSE:
+  The iframe height was set using a hardcoded CSS calc() value (e.g.,
+  calc(100vh - 235px)) that did not account for the actual height of the
+  Salesforce header, navigation bar, and tab strip. The component host element
+  was also not clamped to the viewport height, allowing Lightning's tab panel
+  to push content below the visible area.
+
+FIX APPLIED:
+  - Replaced static calc() with JavaScript dynamic measurement using
+    getBoundingClientRect() to read the exact pixel position of the component
+    and each iframe at runtime.
+  - Clamped the :host element height to (window.innerHeight - host.top) so
+    the component can never extend past the viewport bottom.
+  - Added requestAnimationFrame defer so measurements happen after the browser
+    finishes layout, not before.
+  - Added window resize listener so the layout recalculates on browser resize.
+
+FILES CHANGED:
+  salesforce/force-app/main/default/lwc/facebookListing/facebookListing.js
+  salesforce/force-app/main/default/lwc/facebookListing/facebookListing.css
+
+--------------------------------------------------------------------------------
+BUG #2 — Dark Navy Edge Halo / Color Mismatch on Component Borders
+--------------------------------------------------------------------------------
+ORIGINAL PROBLEM:
+  A subtle color difference was visible at the edges of the Facebook Listing
+  component. A slightly different shade of dark blue/navy appeared just outside
+  the component boundary, creating a visible halo or border effect.
+
+ROOT CAUSE:
+  The :host element background was set to a linear gradient
+  (linear-gradient(180deg, #061a38 0%, #0b244a 100%)) while the global page
+  background injection used a flat solid color (#061a38). Where the two met
+  at the component edges, the gradient's lighter end (#0b244a) was visible
+  against the flat page color.
+
+FIX APPLIED:
+  Changed :host background from the gradient to a flat solid #061a38 to exactly
+  match the injected page background color, eliminating the seam.
+
+FILES CHANGED:
+  salesforce/force-app/main/default/lwc/facebookListing/facebookListing.css
+
+--------------------------------------------------------------------------------
+BUG #3 — Iframe Content Too Tall / Excess Padding Around Table
+--------------------------------------------------------------------------------
+ORIGINAL PROBLEM:
+  The white data table inside the Salesperson Listings, Analytics, and Manager
+  pages had too much padding around it, making the content area feel bloated
+  and wasting vertical screen space. Users had less visible table rows than
+  necessary on a standard monitor.
+
+ROOT CAUSE:
+  The body padding in Listings.html, Analytics.html, and Manager.html was set
+  to 12px on all sides. This was appropriate for standalone use but excessive
+  when embedded in the tighter Salesforce Lightning iframe layout.
+
+FIX APPLIED:
+  Reduced body padding from 12px to 5px in:
+    - src/Listings.html
+    - src/Analytics.html
+    - src/Manager.html
+
+  Also reduced the table container max-height:
+    - Listings.html:  75vh → 65vh
+    - Analytics.html: 78vh → 66vh
+    - Manager.html:   78vh → 66vh
+
+FILES CHANGED:
+  src/Listings.html
+  src/Analytics.html
+  src/Manager.html
+
+DEPLOYMENT:
+  Apps Script push + deploy — Version 58 (April 24, 2026)
+
+--------------------------------------------------------------------------------
+BUG #4 — Iframe Randomly Refreshing / Interrupting Users Mid-Use
+--------------------------------------------------------------------------------
+ORIGINAL PROBLEM:
+  Every 4 minutes, all three iframe tabs would visibly reload simultaneously —
+  blanking out and showing a loading spinner — even while a user was actively
+  reading or editing data in the tool. This was disruptive and appeared as a
+  random crash/reset to end users.
+
+ROOT CAUSE:
+  The background URL refresh timer called _loadAllUrls() every 4 minutes.
+  That function set all three tab URLs to null and set all loading states to
+  true before fetching new signed URLs. This caused all active iframes to
+  immediately go blank and show the spinner while waiting for the new URL.
+
+  Additionally, renderedCallback() fired on every @track property change
+  (including URL updates and loading toggles), causing _sizeFrames() to write
+  inline styles repeatedly and trigger unnecessary reflows.
+
+FIX APPLIED:
+  - Added a silent=true flag to background refreshes. When silent=true:
+      * The iframe URL is NOT set to null
+      * The loading spinner is NOT shown
+      * The new URL is swapped in seamlessly once it loads
+      * Errors are suppressed (user is not interrupted for background failures)
+  - Only the initial page load (silent=false) shows the spinner.
+  - iframe style.height is now only written when the value actually changes,
+    preventing unnecessary reflows on every state update.
+
+FILES CHANGED:
+  salesforce/force-app/main/default/lwc/facebookListing/facebookListing.js
+
+DEPLOYED TO:
+  Salesforce Production (calendarDev) — Deploy ID: 0AfVo0000011UBZKA2
+
+--------------------------------------------------------------------------------
+BUG #5 — Apex Heap Size Too Large on Grouped Photo Downloads
+--------------------------------------------------------------------------------
+ORIGINAL PROBLEM:
+  Clicking "Download Photos as ZIP" in the Listing Generator tab threw the
+  error: "Apex heap size too large: 21928224". The ZIP download failed
+  entirely and no photos were returned to the user.
+
+ROOT CAUSE:
+  FacebookListingPhotoProxyService.cls fetched all photo URLs in a single
+  Apex transaction. For a typical listing with many photos, the server
+  fetched each image, base64-encoded it, and held all results in memory
+  simultaneously. With 20+ photos at roughly 1 MB each (1.33 MB as base64),
+  the combined heap easily exceeded Salesforce's synchronous 6 MB limit
+  (the actual transaction reached ~21.9 MB).
+
+  MAX_URLS_PER_REQUEST was set to 60 — far more than could fit in one
+  transaction — so there was no effective batch limit in practice.
+
+FIX APPLIED:
+  Two-part fix to keep every Apex call well under the 6 MB heap limit:
+
+  1. Apex (FacebookListingPhotoProxyService.cls):
+     - Reduced MAX_URLS_PER_REQUEST from 60 → 5.
+     - Each server call now handles at most 5 photos (~3–4 MB heap usage).
+
+  2. LWC (facebookListingCreate.js — _downloadPhotosAsZip):
+     - Replaced single getPhotoDownloadPayload({ urls }) call with a
+       sequential batch loop (BATCH_SIZE = 5).
+     - URLs are split into chunks of 5; each chunk is fetched one at a time
+       using a recursive runBatch(index) function.
+     - Results accumulate in allFiles[] across all batches; a single ZIP is
+       assembled and downloaded only after all batches complete.
+     - isDownloadingPhotos flag is managed correctly across all exit paths
+       (success, partial failure, and error).
+
+FILES CHANGED:
+  salesforce/force-app/main/default/classes/FacebookListingPhotoProxyService.cls
+  salesforce/force-app/main/default/lwc/facebookListingCreate/facebookListingCreate.js
+
+DEPLOYED TO:
+  Salesforce Production (calendarDev) — Deploy ID: 0AfVo0000011UDBKA2
+  April 24, 2026
+
+--------------------------------------------------------------------------------
+BUG #6 — Copy Listing Button Silently Failing
+--------------------------------------------------------------------------------
+ORIGINAL PROBLEM:
+  Clicking the "Copy Listing" button in the Listing Generator tab did nothing.
+  No success message, no error message — completely silent. The listing text
+  was not copied to the clipboard.
+
+ROOT CAUSE:
+  The implementation called navigator.clipboard.writeText() directly.
+  Salesforce Lightning Web Security (LWS) sandboxes the global context and
+  may leave navigator.clipboard undefined or blocked. When that is the case,
+  accessing .writeText() throws a synchronous TypeError BEFORE the Promise
+  is created. Because the throw is synchronous, the .catch() on the Promise
+  chain never executes — producing a completely silent failure with no error
+  message shown to the user.
+
+FIX APPLIED:
+  Three-layer clipboard fallback in handleCopyListing():
+
+  1. Existence check: verify navigator.clipboard and .writeText are available
+     before attempting the modern Clipboard API.
+  2. Async fallback: if the modern API rejects its Promise, fall through to
+     _execCommandCopy().
+  3. Sync try/catch wrapper: catches any synchronous LWS-level throw before
+     the Promise can be created.
+
+  _execCommandCopy() creates a temporary offscreen <textarea>, sets its value
+  to the listing text, selects it, calls document.execCommand('copy'), then
+  immediately removes the element. This approach works in all Salesforce LWC
+  environments regardless of LWS clipboard restrictions.
+
+  _clearMessages() is also called at the start of handleCopyListing() to
+  clear any stale success/error banners before the new attempt.
+
+FILES CHANGED:
+  salesforce/force-app/main/default/lwc/facebookListingCreate/facebookListingCreate.js
+
+DEPLOYED TO:
+  Salesforce Production (calendarDev) — Deploy ID: 0AfVo0000011UEnKAM
+  April 24, 2026
+
+--------------------------------------------------------------------------------
+BUG #7 — Dark Navy Background Bleeding Onto Other Salesforce Tabs
+--------------------------------------------------------------------------------
+ORIGINAL PROBLEM:
+  After visiting the Facebook Listing tab, the dark navy (#061a38) background
+  began appearing on every other Salesforce tab — Team Calendar Board, Home,
+  and others — covering roughly 3/4 of the visible page area around the
+  native Salesforce content. The navy persisted for the rest of the session
+  until the browser was reloaded.
+
+ROOT CAUSE:
+  Both LWC components (facebookListing and facebookListingCreate) were
+  injecting a global stylesheet into document.head on connectedCallback():
+
+      html,body{background:#061a38!important;overflow:hidden!important}
+
+  This style targeted html/body with !important, affecting the ENTIRE
+  Salesforce single-page application — not just the Facebook Listing tab.
+  Lightning is a SPA: switching tabs does not reload the document, it only
+  unmounts/mounts components. In Salesforce console/workspace tab apps,
+  components are often kept alive (cached) when switching tabs, so
+  disconnectedCallback() never fires. The injected style remained in
+  document.head and continued painting every other tab navy.
+
+FIX APPLIED:
+  Scoped the dark theme to the LWC component and its tab content panel
+  only — no more global html/body overrides:
+
+  1. Removed the html/body !important style injection from BOTH
+     facebookListing.js and facebookListingCreate.js connectedCallback().
+  2. Removed the now-unused 'fb-dark-bg' cleanup entry from
+     disconnectedCallback() in facebookListing.js.
+  3. Extended the existing 'fb-tab-style' injection (already scoped to
+     .slds-tabs_default__*) with `background: #061a38 !important` on
+     `.slds-tabs_default__content.slds-show`. This paints only the tab
+     content panel that actually holds our component — it does NOT affect
+     the rest of the Salesforce UI because no other page renders inside
+     that selector.
+  4. The :host background on facebookListing.css remains #061a38 (flat),
+     so the component itself stays navy edge-to-edge.
+
+  Net effect: Facebook Listing tab is fully navy as before. Team Calendar
+  Board and every other Salesforce tab/page returns to its native white/
+  grey background.
+
+FILES CHANGED:
+  salesforce/force-app/main/default/lwc/facebookListing/facebookListing.js
+  salesforce/force-app/main/default/lwc/facebookListingCreate/facebookListingCreate.js
+
+DEPLOYED TO:
+  Salesforce Production (calendarDev) — Deploy ID: 0AfVo0000011UJdKAM
+  April 24, 2026
+
+--------------------------------------------------------------------------------
+BUG #8 — Iframes Reloading Mid-Session Every ~4 Minutes
+--------------------------------------------------------------------------------
+ORIGINAL PROBLEM:
+  After Bug #4's "silent" refresh fix, users still reported the iframes
+  visibly reloading roughly every 4 minutes — table blanking out, scroll
+  position lost, and any in-progress work in the Listing Generator
+  interrupted.
+
+ROOT CAUSE:
+  Bug #4 only suppressed the spinner and avoided nulling the URL, but the
+  underlying setInterval was still running every 4 minutes and assigning
+  a fresh signed URL to the iframe `src`. Browsers ALWAYS treat an iframe
+  src reassignment as a real navigation — there is no way to "silently"
+  swap an iframe URL once the iframe has loaded. So the periodic refresh
+  was always going to cause a visible reload.
+
+  The 4-minute interval existed only to refresh the signed URL before its
+  5-minute server-side expiry (FacebookListingUrlBuilder.TOKEN_TTL_MS).
+
+FIX APPLIED:
+  Two-part fix to eliminate forced reloads entirely:
+
+  1. Apex (FacebookListingUrlBuilder.cls):
+     - TOKEN_TTL_MS extended from 300000L (5 min) → 28800000L (8 hours).
+     - Apps Script's verifySalesforceEmbedRequest_() only checks
+       Date.now() < expiresAt (no upper-bound), so a long TTL is safe.
+     - Users get a fresh token on every page/tab load; 8 hours easily
+       outlasts any realistic single session.
+
+  2. LWC (facebookListing.js):
+     - Removed setInterval(_loadAllUrls, REFRESH_INTERVAL_MS) entirely.
+     - Removed _refreshTimer field and its disconnectedCallback cleanup.
+     - Removed unused REFRESH_INTERVAL_MS constant.
+     - URLs are now signed once on connectedCallback and never refreshed
+       in-place.
+
+FILES CHANGED:
+  salesforce/force-app/main/default/classes/FacebookListingUrlBuilder.cls
+  salesforce/force-app/main/default/lwc/facebookListing/facebookListing.js
+
+DEPLOYED TO:
+  Salesforce Production (calendarDev) — Deploy ID: 0AfVo0000011ULFKA2
+  April 24, 2026
+
+--------------------------------------------------------------------------------
+BUG #9 — Empty Navy Strip Below Table (Body Not Filling Iframe)
+--------------------------------------------------------------------------------
+ORIGINAL PROBLEM:
+  After the cosmetic clean-up from Bug #7, a visible navy strip appeared
+  below the data table on every page (Listings, Analytics, Manager). The
+  strip was the same color as the LWC host background bleeding through the
+  empty space inside the iframe.
+
+ROOT CAUSE:
+  The LWC's _sizeFrames() correctly sized each iframe ELEMENT to fill from
+  its top to the viewport bottom. But INSIDE the iframe, the Apps Script
+  body's content (brand-header + page-header + table-wrap with capped
+  max-height: 65–69vh) was SHORTER than the iframe height, leaving empty
+  body space at the bottom.
+
+  When Bug #7 removed the body's gradient background entirely, that empty
+  space became transparent — letting the LWC :host navy show through and
+  creating a visible strip that did not match the table's appearance.
+
+FIX APPLIED:
+  Two-part fix:
+
+  1. Set body { background: #061a38 } (flat, matching the host exactly)
+     on all four Apps Script pages (Listings, Analytics, Manager, Index).
+     The empty space below the table now blends seamlessly with the host —
+     no visible strip, no halo.
+
+  2. Increased .table-wrap max-height to absorb most of the empty space:
+     - Listings.html:  65vh → 78vh
+     - Analytics.html: 69vh → 80vh
+     - Manager.html:   67vh → 78vh
+
+FILES CHANGED:
+  src/Listings.html
+  src/Analytics.html
+  src/Manager.html
+  src/Index.html
+
+DEPLOYMENT:
+  Apps Script push + deploy — Versions 62 → 66 (April 24, 2026)
+
+--------------------------------------------------------------------------------
+BUG #10 — Outer Page Vertical Scroll Reappearing (Lightning Footer Overlap)
+--------------------------------------------------------------------------------
+ORIGINAL PROBLEM:
+  A small outer-page vertical scroll reappeared on the Facebook Listing
+  tab. The component extended slightly past the viewport bottom, behind
+  Salesforce Lightning's bottom utility bar (Quick Links / Open Tasks /
+  How-To Videos), forcing the user to scroll to see the lower edge.
+
+ROOT CAUSE:
+  _sizeFrames() in facebookListing.js calculated the host and iframe heights
+  using `window.innerHeight - hostTop` (and similar for iframes), filling
+  the entire visible viewport. But Lightning's bottom utility bar sits
+  ON TOP of the page at roughly 30–40px tall — it is not subtracted from
+  window.innerHeight. The component therefore extended UNDER the utility
+  bar, pushing the page slightly past the viewport and producing the small
+  outer scroll.
+
+FIX APPLIED:
+  Added a FOOTER_RESERVE = 40px constant inside _sizeFrames() and
+  subtracted it from both height calculations:
+
+      const hostHeight = window.innerHeight - hostTop - FOOTER_RESERVE;
+      const newH = Math.max(200, window.innerHeight - rect.top - FOOTER_RESERVE);
+
+  This reserves space for Lightning's utility bar so the component never
+  extends below it, eliminating the outer scroll entirely.
+
+FILES CHANGED:
+  salesforce/force-app/main/default/lwc/facebookListing/facebookListing.js
+
+DEPLOYED TO:
+  Salesforce Production (calendarDev) — Deploy ID 0AfVo0000011UUvKAM
+  (deployed alongside Bug #11 mobile tightening)
+
+--------------------------------------------------------------------------------
+BUG #11 — Mobile View Tightening (Phone Portrait + Landscape)
+--------------------------------------------------------------------------------
+ORIGINAL PROBLEM:
+  The tool was already usable on a phone, but it was visibly desktop-first:
+  oversized brand header logos, large hero title, big card padding, wide
+  table cells, and the Listings table's 1500px min-width forced a long
+  horizontal scroll on phones. There was also too much wasted vertical
+  space — the table viewport felt cramped relative to screen height.
+
+ROOT CAUSE:
+  No phone-specific media block existed in the four Apps Script pages
+  (Listings / Analytics / Manager / Index). The existing
+  @media (max-width: 1000px) block covered tablet, but on a 360–414px
+  phone the brand-header still consumed ~25% of the screen, the table
+  font/padding stayed at desktop scale, and Listings.html kept its
+  desktop-only `min-width: 1500px` — making the table strip 4× wider
+  than the phone screen.
+
+  In the LWC wrapper (facebookListing.css), the previous mobile block
+  set `:host { height: auto }` and the iframe to a static
+  `calc(100vh - 120px)`, which fought against the dynamic JS sizing
+  in _sizeFrames() and could leave gaps or overshoot on landscape.
+
+  Bug #10's FOOTER_RESERVE of 40px is correct on desktop but is taller
+  than Salesforce's mobile chrome — wasting ~20px of vertical space
+  on phones.
+
+FIX APPLIED:
+  Three-part fix (works in both portrait and landscape automatically
+  because _sizeFrames() recalculates on resize / orientation change):
+
+  1. Added @media (max-width: 767px) block to all four Apps Script pages
+     (Listings, Analytics, Manager, Index):
+       - body padding: 4px
+       - .brand-header: padding 6px 10px, margin-bottom 6px,
+         border-radius 12px
+       - .brand-header-inner gap: 4px
+       - .brand-logo-left/right: min-height 32–36px, max-height 32–36px
+       - .brand-title: 18px / line-height 1.15
+       - .brand-subtitle: 11px
+       - .card: padding 8px, margin-bottom 6px, border-radius 12px
+       - .table-wrap: max-height 88vh, border-radius 10px
+       - table: font-size 11px
+       - th, td: padding 4px 6px
+
+  2. Added @media (max-width: 480px) block to all four pages:
+       - .brand-logo-left, .brand-logo-right { display: none }
+         (frees full width for the title on very narrow phones)
+       - .brand-title: 16px
+
+  3. Listings.html mobile block additionally:
+       - table { min-width: 900px; width: 900px }   (was 1500px)
+       - td.data-cell { max-width: 200px }          (was 320px)
+     Cuts horizontal scroll roughly in half on phones while still
+     keeping the table readable.
+
+  4. LWC facebookListing.css mobile block rewritten to PRESERVE the
+     JS-driven sizing instead of fighting it:
+       - Removed :host { height: auto }
+       - Removed .listing-frame { height: calc(100vh - 120px) }
+       - Kept only .container { margin: 0; padding: 0 } and
+         tighter .error-box mobile spacing
+     Now the iframe height is set entirely by _sizeFrames() and adapts
+     correctly on orientation change.
+
+  5. LWC facebookListing.js — made FOOTER_RESERVE responsive:
+       const FOOTER_RESERVE = window.innerWidth < 768 ? 20 : 40;
+     Recovers ~20px of usable height on phones while keeping the
+     desktop reservation that fixed Bug #10.
+
+FILES CHANGED:
+  src/Listings.html
+  src/Analytics.html
+  src/Manager.html
+  src/Index.html
+  salesforce/force-app/main/default/lwc/facebookListing/facebookListing.css
+  salesforce/force-app/main/default/lwc/facebookListing/facebookListing.js
+
+DEPLOYED TO:
+  Apps Script — push + deploy, Version 73 (April 24, 2026)
+  Salesforce Production (calendarDev) — Deploy ID 0AfVo0000011UUvKAM
+
+--------------------------------------------------------------------------------
+BUG #12 — Mobile View Filling Only Half (Portrait) and Quarter (Landscape) of Phone Screen
+--------------------------------------------------------------------------------
+ORIGINAL PROBLEM:
+  In the Salesforce Mobile app, the Facebook Listing component did not
+  fill the phone viewport:
+    - Portrait: component rendered at roughly the bottom HALF of the
+      screen, leaving a large empty area above it.
+    - Landscape: component rendered at roughly the bottom QUARTER of
+      the screen — even worse — and the inner content didn't look
+      right (desktop layout / oversized header on a short viewport).
+
+ROOT CAUSE:
+  Two compounding bugs in _sizeFrames() in facebookListing.js:
+
+  1. The function calculated host/iframe height using
+     `window.innerHeight - rect.top - FOOTER_RESERVE`. In the
+     Salesforce Mobile app, the LWC sits inside Salesforce's own
+     scroll container with the Salesforce header + tab strip pushing
+     `rect.top` hundreds of pixels below the viewport top. Subtracting
+     that large rect.top left only ~half the viewport for the iframe.
+
+  2. The mobile-detection short-circuit added in Bug #11 used only
+     `window.innerWidth < 768`. A landscape iPhone reports
+     ~812×430 to ~932×430 — innerWidth is ABOVE 768, so the check
+     failed and the code fell through to the desktop branch with
+     the broken rect.top math, clipping ~3/4 of the screen.
+
+  Inside the iframe (Apps Script pages), the mobile media queries
+  were also keyed only on `(max-width: 767px)`, so a landscape phone
+  with width ~812-932 received the desktop layout — oversized header,
+  giant logos, large fonts — making the short landscape viewport feel
+  even more cut off.
+
+FIX APPLIED:
+  Two-layer fix:
+
+  1. LWC facebookListing.js — _sizeFrames() now detects phones by
+     EITHER dimension and bypasses the rect.top math entirely:
+
+       const isPhone = window.innerWidth < 768 || window.innerHeight < 600;
+       if (isPhone) {
+           host.style.height = '100dvh';
+           this.template.querySelectorAll('.listing-frame').forEach(f => {
+               if (f.style.height !== '100dvh') f.style.height = '100dvh';
+           });
+           return;
+       }
+
+     - innerHeight < 600 catches landscape phones (e.g. 932×430)
+     - 100dvh = the visible viewport height (handles mobile address-bar
+       collapse correctly)
+     - The Salesforce Mobile app does NOT render the desktop utility
+       footer, so we don't need a FOOTER_RESERVE on phones — just
+       fill the dynamic viewport and let Salesforce's own scroll
+       container handle positioning.
+     - Desktop branch (FOOTER_RESERVE = 40, rect.top math) is unchanged.
+
+  2. LWC facebookListing.js — added orientationchange and
+     visualViewport.resize listeners (with matching cleanup in
+     disconnectedCallback) so _sizeFrames() re-runs when:
+       - The user rotates the phone (portrait <-> landscape)
+       - The mobile address bar shows/hides
+
+  3. Apps Script pages (Listings, Analytics, Manager, Index) —
+     widened the mobile media queries to also fire on short
+     viewports (i.e. landscape phones):
+
+       @media (max-width: 767px), (max-height: 500px) { ... }
+       @media (max-width: 480px), (max-height: 450px) { ... }
+
+     Now the compact mobile header / 11px table font / hidden
+     side-logos all apply in landscape on a phone, regardless of
+     the larger landscape width.
+
+FILES CHANGED:
+  salesforce/force-app/main/default/lwc/facebookListing/facebookListing.js
+  src/Listings.html
+  src/Analytics.html
+  src/Manager.html
+  src/Index.html
+
+DEPLOYED TO:
+  Apps Script — push + deploy, Version 74 (April 24, 2026)
+  Salesforce Production (calendarDev) — Deploy IDs:
+    0AfVo0000011UWXKA2  (initial mobile dvh fix — portrait)
+    0AfVo0000011UY9KAM  (landscape detection + media queries)
+
+================================================================================
+  REFERENCE SNAPSHOTS
+================================================================================
+  reference/v28-production/  — Original production baseline
+  reference/v48-production/  — Previous production snapshot
+  reference/v51-production/  — Live Apps Script snapshot as of April 21, 2026
+                               (Version 51, 11:20 PM) — baseline for this session
+
+================================================================================
+  END OF BUG FIX LOG V1
+================================================================================

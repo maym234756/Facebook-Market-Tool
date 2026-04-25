@@ -1,6 +1,6 @@
 :host {
     display: block;
-    height: calc(100vh - 200px);
+    height: calc(100vh - 205px);
     overflow-y: auto;
     overflow-x: hidden;
     background: linear-gradient(180deg, #061a38 0%, #0b244a 100%);

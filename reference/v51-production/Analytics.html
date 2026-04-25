@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      :root {
+        --navy-900: #061a38;
+        --navy-800: #0a2550;
+        --navy-700: #12366d;
+        --blue-600: #1a56a3;
+        --blue-500: #2f73c7;
+        --aqua-400: #79d0d8;
+        --aqua-300: #9adfe4;
+        --white: #ffffff;
+        --slate-50: #f5f8fc;
+        --slate-100: #e8eef7;
+        --slate-200: #d5dfed;
+        --slate-500: #64748b;
+        --text-dark: #12233d;
+        --success: #0f8b6d;
+        --danger: #b42318;
+        --shadow: 0 10px 24px rgba(3, 22, 51, 0.18);
+        --radius: 16px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", Arial, sans-serif;
+        background: linear-gradient(180deg, var(--navy-900) 0%, #0b244a 100%);
+        margin: 0;
+        padding: 8px;
+        color: var(--text-dark);
+      }
+
+      .wrap {
+        max-width: 1800px;
+        margin: 0 auto;
+      }
+
+      .brand-header {
+        background: linear-gradient(135deg, rgba(255,255,255,.12), rgba(255,255,255,.05));
+        border: 1px solid rgba(121, 208, 216, 0.22);
+        border-radius: 16px;
+        padding: 10px 16px;
+        margin-bottom: 10px;
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(4px);
+      }
+
+      .brand-header-inner {
+        display: grid;
+        grid-template-columns: 180px 1fr 180px;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .brand-logo-left,
+      .brand-logo-right {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 50px;
+      }
+
+      .brand-logo-left img,
+      .brand-logo-right img {
+        max-width: 100%;
+        max-height: 50px;
+        object-fit: contain;
+        display: block;
+      }
+
+      .brand-title-wrap {
+        text-align: center;
+        color: var(--white);
+      }
+
+      .brand-title {
+        margin: 0;
+        font-size: 26px;
+        font-weight: 800;
+        letter-spacing: 0.4px;
+        line-height: 1.1;
+        color: var(--white);
+      }
+
+      .brand-subtitle {
+        margin-top: 3px;
+        color: var(--aqua-300);
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 1.1px;
+        text-transform: uppercase;
+      }
+
+      .card {
+        background: rgba(255,255,255,0.98);
+        border-radius: var(--radius);
+        padding: 12px 14px;
+        margin-bottom: 10px;
+        box-shadow: var(--shadow);
+        border: 1px solid rgba(10, 37, 80, 0.08);
+      }
+
+      h1 {
+        margin: 0 0 10px;
+        color: var(--navy-800);
+      }
+
+      .nav {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+        margin-bottom: 4px;
+        font-size: 14px;
+      }
+<? if (embedParam === 'salesforce') { ?>
+      .nav { display: none !important; }
+<? } ?>
+
+      .nav a {
+        text-decoration: none;
+        font-weight: 800;
+        color: var(--navy-700);
+        padding: 4px 10px;
+        border-radius: 999px;
+        transition: 0.2s ease;
+      }
+
+      .nav a:hover {
+        background: rgba(121, 208, 216, 0.16);
+        color: var(--navy-900);
+      }
+
+      .nav span {
+        color: #8aa0bf;
+        font-weight: 700;
+      }
+
+      .status {
+        margin-top: 12px;
+        font-size: 14px;
+        font-weight: 800;
+      }
+
+      .toolbar {
+        display: flex;
+        gap: 12px;
+        align-items: end;
+        flex-wrap: wrap;
+      }
+
+      label {
+        display: block;
+        font-size: 12px;
+        font-weight: 800;
+        margin-bottom: 6px;
+        color: var(--navy-700);
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+      }
+
+      select, button {
+        box-sizing: border-box;
+        border-radius: 10px;
+        border: 1px solid var(--slate-200);
+        padding: 7px 10px;
+        font-size: 13px;
+        transition: 0.2s ease;
+      }
+
+      select {
+        width: 100%;
+        max-width: 260px;
+      }
+
+      select:focus {
+        outline: none;
+        border-color: var(--aqua-400);
+        box-shadow: 0 0 0 3px rgba(121, 208, 216, 0.22);
+      }
+
+      button {
+        background: linear-gradient(135deg, var(--blue-600), var(--navy-700));
+        color: var(--white);
+        border: none;
+        cursor: pointer;
+        font-weight: 800;
+        letter-spacing: 0.2px;
+        box-shadow: 0 6px 14px rgba(18, 54, 109, 0.22);
+      }
+
+      button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 10px 18px rgba(18, 54, 109, 0.26);
+      }
+
+      .table-wrap {
+        overflow: auto;
+        max-height: 78vh;
+        border: 1px solid var(--slate-200);
+        border-radius: 14px;
+        background: var(--white);
+      }
+
+      table {
+        border-collapse: collapse;
+        font-size: 13px;
+        table-layout: fixed;
+        background: var(--white);
+      }
+
+      th, td {
+        border: 1px solid #d7e1ef;
+        padding: 8px;
+        vertical-align: top;
+        text-align: left;
+        overflow-wrap: break-word;
+        white-space: pre-wrap;
+      }
+
+      th {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+      }
+
+      @media (max-width: 1000px) {
+        .brand-header-inner {
+          grid-template-columns: 1fr;
+        }
+
+        .brand-logo-left,
+        .brand-logo-right {
+          min-height: 40px;
+        }
+
+        .brand-logo-left img,
+        .brand-logo-right img {
+          max-height: 40px;
+        }
+
+        .brand-title {
+          font-size: 22px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="brand-header">
+        <div class="brand-header-inner">
+          <div class="brand-logo-left">
+            <img
+              src="https://www.premierboatingcenters.com/wp-content/uploads/2024/10/premier-boating-centers-tx.png"
+              alt="Premier Boating Centers"
+            />
+          </div>
+
+          <div class="brand-title-wrap">
+            <h1 class="brand-title">PBC/OMG Facebook Listings Tool</h1>
+            <div class="brand-subtitle">Internal Listing Generator & Management Console</div>
+          </div>
+
+          <div class="brand-logo-right">
+            <img
+              src="https://www.oceanmarine.boats/wp-content/uploads/2025/03/ocean-marine-boats.png"
+              alt="Ocean Marine Group"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="nav">
+          <a id="navIndex" href="#">Listing Generator</a>
+          <span>|</span>
+          <a id="navListings" href="#">Salesperson Listings</a>
+          <span>|</span>
+          <a id="navAnalytics" href="#">Analytics</a>
+          <span>|</span>
+          <a id="navManager" href="#">Manager View</a>
+        </div>
+
+        <h1>Analytics</h1>
+
+        <div class="toolbar">
+          <div>
+            <label for="region">Region</label>
+            <select id="region" onchange="onRegionChange()">
+              <option value="">Select a region</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="analyticsView">View</label>
+            <select id="analyticsView">
+              <option value="All Used Units">All Used Units</option>
+              <option value="Regional Used Units">Regional Used Units</option>
+            </select>
+          </div>
+
+          <div>
+            <button type="button" onclick="loadAnalytics()">Load Analytics</button>
+          </div>
+        </div>
+
+        <div id="status" class="status"></div>
+      </div>
+
+      <div class="card">
+        <div class="table-wrap">
+          <table id="analyticsTable">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      var currentRegion = '';
+      var _embedSuffix = (function() {
+        var em = '<?= embedParam ?>';
+        var ex = '<?= expiresParam ?>';
+        var sg = '<?= sigParam ?>';
+        return (em && ex && sg)
+          ? '&embed=' + encodeURIComponent(em) + '&expires=' + encodeURIComponent(ex) + '&sig=' + encodeURIComponent(sg)
+          : '';
+      })();
+
+      function setStatus(message, isError) {
+        var el = document.getElementById('status');
+        el.textContent = message || '';
+        el.style.color = isError ? '#b42318' : '#0f8b6d';
+      }
+
+      function getRegionFromUrl() {
+        var params = new URLSearchParams(window.location.search);
+        return params.get('region') || '';
+      }
+
+      function getSavedRegion() {
+        return localStorage.getItem('selectedRegion') || '';
+      }
+
+      function saveRegion(region) {
+        localStorage.setItem('selectedRegion', region || '');
+      }
+
+      function updateNavLinks() {
+        var encoded = currentRegion ? encodeURIComponent(currentRegion) : '';
+        var suffix = (encoded ? '&region=' + encoded : '') + _embedSuffix;
+
+        document.getElementById('navIndex').href = '<?= appUrl ?>?page=index' + suffix;
+        document.getElementById('navListings').href = '<?= appUrl ?>?page=listings' + suffix;
+        document.getElementById('navAnalytics').href = '<?= appUrl ?>?page=analytics' + suffix;
+        document.getElementById('navManager').href = '<?= appUrl ?>?page=manager' + suffix;
+      }
+
+      function populateRegions(regions) {
+        var select = document.getElementById('region');
+        select.innerHTML = '<option value="">Select a region</option>';
+
+        (regions || []).forEach(function(region) {
+          var option = document.createElement('option');
+          option.value = region;
+          option.textContent = region;
+          select.appendChild(option);
+        });
+
+        if (currentRegion) {
+          select.value = currentRegion;
+        }
+      }
+
+      function clearAnalyticsTable() {
+        var table = document.getElementById('analyticsTable');
+        table.querySelector('thead').innerHTML = '';
+        table.querySelector('tbody').innerHTML = '';
+
+        var oldColgroup = table.querySelector('colgroup');
+        if (oldColgroup) {
+          oldColgroup.remove();
+        }
+      }
+
+      function onRegionChange() {
+        currentRegion = document.getElementById('region').value || '';
+        saveRegion(currentRegion);
+        updateNavLinks();
+        clearAnalyticsTable();
+
+        if (!currentRegion) {
+          setStatus('Select a region first.', true);
+          return;
+        }
+
+        loadAnalytics();
+      }
+
+      function loadAnalytics() {
+        if (!currentRegion) {
+          setStatus('Select a region first.', true);
+          return;
+        }
+
+        var viewName = document.getElementById('analyticsView').value;
+        setStatus('Loading analytics...');
+
+        google.script.run
+          .withSuccessHandler(function(result) {
+            renderAnalyticsTable(result);
+            setStatus('');
+          })
+          .withFailureHandler(function(err) {
+            setStatus((err && err.message) ? err.message : 'Failed to load analytics.', true);
+          })
+          .getAnalyticsData(currentRegion, viewName);
+      }
+
+      function renderAnalyticsTable(result) {
+        var table = document.getElementById('analyticsTable');
+        var thead = table.querySelector('thead');
+        var tbody = table.querySelector('tbody');
+
+        thead.innerHTML = '';
+        tbody.innerHTML = '';
+
+        var oldColgroup = table.querySelector('colgroup');
+        if (oldColgroup) {
+          oldColgroup.remove();
+        }
+
+        if (!result || !result.values || result.values.length === 0) {
+          setStatus('No analytics data found.', true);
+          return;
+        }
+
+        var values = result.values;
+        var backgrounds = result.backgrounds || [];
+        var columnWidths = result.columnWidths || [];
+
+        var colgroup = document.createElement('colgroup');
+        for (var c = 0; c < columnWidths.length; c++) {
+          var col = document.createElement('col');
+          col.style.width = (columnWidths[c] || 120) + 'px';
+          colgroup.appendChild(col);
+        }
+        table.insertBefore(colgroup, thead);
+
+        if (values.length > 0) {
+          var headerRow = document.createElement('tr');
+          values[0].forEach(function(cell, colIndex) {
+            var th = document.createElement('th');
+            th.textContent = cell;
+            th.style.backgroundColor =
+              (backgrounds[0] && backgrounds[0][colIndex]) ?
+              backgrounds[0][colIndex] : '#f2f4f7';
+            th.style.minWidth = (columnWidths[colIndex] || 120) + 'px';
+            headerRow.appendChild(th);
+          });
+          thead.appendChild(headerRow);
+        }
+
+        for (var r = 1; r < values.length; r++) {
+          var tr = document.createElement('tr');
+
+          values[r].forEach(function(cell, colIndex) {
+            var td = document.createElement('td');
+            td.textContent = cell;
+            td.style.backgroundColor =
+              (backgrounds[r] && backgrounds[r][colIndex]) ?
+              backgrounds[r][colIndex] : '#ffffff';
+            td.style.minWidth = (columnWidths[colIndex] || 120) + 'px';
+            tr.appendChild(td);
+          });
+
+          tbody.appendChild(tr);
+        }
+      }
+
+      function init() {
+        currentRegion = getRegionFromUrl() || getSavedRegion() || '';
+        updateNavLinks();
+
+        google.script.run
+          .withSuccessHandler(function(regions) {
+            populateRegions(regions || []);
+
+            if (currentRegion) {
+              document.getElementById('region').value = currentRegion;
+              saveRegion(currentRegion);
+              loadAnalytics();
+            } else {
+              clearAnalyticsTable();
+              setStatus('Select a region first.', true);
+            }
+          })
+          .withFailureHandler(function(err) {
+            setStatus((err && err.message) ? err.message : 'Failed to load regions.', true);
+          })
+          .getRegions();
+      }
+
+      window.addEventListener('load', init);
+    </script>
+  </body>
+  <!--
+  Professional summary:
+  This file is the Analytics page for the Apps Script web application. It renders spreadsheet-based
+  reporting views for all used units and regional used units in a table format suitable for internal
+  operational review.
+
+  Operational role:
+  - Loads the selected region's analytics data from Apps Script
+  - Switches between All Used Units and Regional Used Units views
+  - Reconstructs sheet formatting cues such as column widths and background colors in the browser
+  - Preserves region-aware navigation across the multi-page application
+
+  Business purpose:
+  This page provides dealership staff and managers with a fast browser-based way to review reporting
+  data that still reflects the structure and emphasis of the underlying Google Sheet.
+  -->
+</html>

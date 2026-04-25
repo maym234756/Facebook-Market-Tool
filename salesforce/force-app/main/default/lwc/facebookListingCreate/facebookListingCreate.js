@@ -37,20 +37,12 @@ export default class FacebookListingCreate extends LightningElement {
 
     // -----------------------------------------------------------------------
     connectedCallback() {
-        if (!document.getElementById('fb-dark-bg')) {
-            const s = document.createElement('style');
-            s.id = 'fb-dark-bg';
-            s.textContent = 'html,body{background:#061a38!important}';
-            document.head.appendChild(s);
-        }
         // Load top-level form data (regions, empty salespeople + classes)
         this._loadFormData('');
     }
 
     disconnectedCallback() {
         this._cancelActiveGeneration();
-        const s = document.getElementById('fb-dark-bg');
-        if (s) s.remove();
     }
 
     // -----------------------------------------------------------------------
@@ -241,9 +233,43 @@ export default class FacebookListingCreate extends LightningElement {
     // -----------------------------------------------------------------------
     handleCopyListing() {
         if (!this.aiListing) return;
-        navigator.clipboard.writeText(this.aiListing)
-            .then(() => { this.successMessage = 'Listing copied to clipboard!'; })
-            .catch(() => { this.errorMessage = 'Could not copy to clipboard.'; });
+        this._clearMessages();
+
+        // navigator.clipboard may be undefined or blocked by Lightning Web
+        // Security.  A synchronous throw before the Promise is created would
+        // never reach .catch(), producing a silent failure.  Try the modern
+        // API first; fall back to execCommand if it is unavailable.
+        try {
+            if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                navigator.clipboard.writeText(this.aiListing)
+                    .then(() => { this.successMessage = 'Listing copied to clipboard!'; })
+                    .catch(() => { this._execCommandCopy(); });
+            } else {
+                this._execCommandCopy();
+            }
+        } catch (e) {
+            this._execCommandCopy();
+        }
+    }
+
+    _execCommandCopy() {
+        try {
+            const ta = document.createElement('textarea');
+            ta.value = this.aiListing;
+            ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;';
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            const ok = document.execCommand('copy');
+            document.body.removeChild(ta);
+            if (ok) {
+                this.successMessage = 'Listing copied to clipboard!';
+            } else {
+                this.errorMessage = 'Could not copy to clipboard.';
+            }
+        } catch (e) {
+            this.errorMessage = 'Could not copy to clipboard.';
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -350,8 +376,9 @@ export default class FacebookListingCreate extends LightningElement {
     }
 
     // -----------------------------------------------------------------------
-    // Photo download (fetches bytes server-side via Apex proxy, assembles a
-    // store-only ZIP client-side, triggers a browser download)
+    // Photo download (fetches bytes server-side via Apex proxy in batches of 5
+    // to stay under the Apex heap limit, assembles a single store-only ZIP
+    // client-side, then triggers a browser download)
     // -----------------------------------------------------------------------
     _downloadPhotosAsZip(urls, zipFileName) {
         if (!urls || !urls.length) {
@@ -363,19 +390,25 @@ export default class FacebookListingCreate extends LightningElement {
         this._clearMessages();
         this.isDownloadingPhotos = true;
 
-        getPhotoDownloadPayload({ urls })
-            .then(files => {
-                const list = Array.isArray(files) ? files : [];
-                if (!list.length) {
-                    this.errorMessage = 'No photos were returned for download.';
-                    return;
-                }
+        // Split into batches of 5 to stay under the 6 MB Apex heap limit.
+        // Each batch is fetched sequentially; results are accumulated then
+        // assembled into one ZIP at the end.
+        const BATCH_SIZE = 5;
+        const batches = [];
+        for (let i = 0; i < urls.length; i += BATCH_SIZE) {
+            batches.push(urls.slice(i, i + BATCH_SIZE));
+        }
 
-                const valid = list.filter(f => f && !f.error && f.base64);
+        const allFiles = [];
+        const runBatch = (index) => {
+            if (index >= batches.length) {
+                // All batches done — assemble the ZIP
+                const valid = allFiles.filter(f => f && !f.error && f.base64);
                 if (!valid.length) {
-                    const firstError = list.find(f => f && f.error);
+                    const firstError = allFiles.find(f => f && f.error);
                     this.errorMessage = 'Failed to download photos: '
                         + (firstError ? firstError.error : 'No valid files returned.');
+                    this.isDownloadingPhotos = false;
                     return;
                 }
 
@@ -388,17 +421,26 @@ export default class FacebookListingCreate extends LightningElement {
                 const blob = new Blob([zipBytes], { type: 'application/zip' });
                 this._triggerBrowserDownload(blob, zipFileName);
 
-                const failedCount = list.length - valid.length;
+                const failedCount = allFiles.length - valid.length;
                 this.successMessage = failedCount > 0
                     ? `Download ready. ${failedCount} photo(s) could not be fetched.`
                     : 'Photo download ready.';
-            })
-            .catch(err => {
-                this.errorMessage = this._extractMessage(err);
-            })
-            .finally(() => {
                 this.isDownloadingPhotos = false;
-            });
+                return;
+            }
+
+            getPhotoDownloadPayload({ urls: batches[index] })
+                .then(files => {
+                    (Array.isArray(files) ? files : []).forEach(f => allFiles.push(f));
+                    runBatch(index + 1);
+                })
+                .catch(err => {
+                    this.errorMessage = this._extractMessage(err);
+                    this.isDownloadingPhotos = false;
+                });
+        };
+
+        runBatch(0);
     }
 
     _base64ToUint8Array(base64) {

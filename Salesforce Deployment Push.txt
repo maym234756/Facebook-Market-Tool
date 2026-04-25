@@ -1,0 +1,3 @@
+
+cd salesforce
+sf project deploy start --source-dir force-app --target-org calendarDev

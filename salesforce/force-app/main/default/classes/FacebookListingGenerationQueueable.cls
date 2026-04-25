@@ -33,13 +33,13 @@ public without sharing class FacebookListingGenerationQueueable implements Queue
             update job;
         } catch (Exception ex) {
             job.Status__c = 'Failed';
-            job.ErrorText__c = trimToFieldLength_(String.valueOf(ex.getMessage()), 32768);
+            job.ErrorText__c = trimToFieldLength(String.valueOf(ex.getMessage()), 32768);
             job.FinishedAt__c = System.now();
             update job;
         }
     }
 
-    private static String trimToFieldLength_(String value, Integer maxLength) {
+    private static String trimToFieldLength(String value, Integer maxLength) {
         if (String.isBlank(value)) {
             return value;
         }

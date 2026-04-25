@@ -15,7 +15,7 @@
 public with sharing class FacebookListingPhotoProxyService {
 
     private static final Integer TIMEOUT_MS = 30000;
-    private static final Integer MAX_URLS_PER_REQUEST = 60;
+    private static final Integer MAX_URLS_PER_REQUEST = 5;
 
     private static final Set<String> ALLOWED_HOSTS = new Set<String>{
         'www.oceanmarine.boats',
