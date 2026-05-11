@@ -1,3 +1,10 @@
+<!--
+  @description       : 
+  @author            : ChangeMeIn@UserSettingsUnder.SFDoc
+  @group             : 
+  @last modified on  : 05-11-2026
+  @last modified by  : ChangeMeIn@UserSettingsUnder.SFDoc
+-->
 <template>
     <div class="container">
         <lightning-tabset ontabselect={handleTabSelect}>
@@ -23,7 +30,7 @@
             </lightning-tab>
 
             <!-- ANALYTICS tab -->
-            <lightning-tab label="Analytics" value="analytics">
+            <lightning-tab label="Regional View" value="analytics">
                 <template lwc:if={analyticsLoading}>
                     <div class="spinner-wrap">
                         <lightning-spinner alternative-text="Loading…" size="large"></lightning-spinner>
@@ -43,7 +50,7 @@
             </lightning-tab>
 
             <!-- MANAGER tab -->
-            <lightning-tab label="Manager View" value="manager">
+            <lightning-tab label="Company-Wide View" value="manager">
                 <template lwc:if={managerLoading}>
                     <div class="spinner-wrap">
                         <lightning-spinner alternative-text="Loading…" size="large"></lightning-spinner>
