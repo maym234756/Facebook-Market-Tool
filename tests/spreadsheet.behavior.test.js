@@ -14,10 +14,10 @@ function createContext() {
   const spreadsheetApp = createSpreadsheetApp({
     [OMG_ID]: {
       Salespeople: [
-        ['Name', 'Active', 'Tab'],
-        ['Zoe Agent', 'Y', 'Zoe Tab'],
-        ['Aaron Seller', 'Y', 'Aaron Tab'],
-        ['Inactive Rep', 'N', 'Inactive Tab']
+        ['Name', 'Tab', 'Active', 'Phone', 'Store', 'Default CTA', 'Region'],
+        ['Zoe Agent', 'Zoe Tab', 'Y', '', '', '', 'OMG'],
+        ['Aaron Seller', 'Aaron Tab', 'Y', '', '', '', 'OMG'],
+        ['Inactive Rep', 'Inactive Tab', 'N', '', '', '', 'OMG']
       ],
       UIMT: [
         [],
@@ -89,9 +89,9 @@ describe('Apps Script spreadsheet behavior', () => {
     const spreadsheetApp = createSpreadsheetApp({
       [OMG_ID]: {
         Salespeople: [
-          ['Name', 'Active', 'Tab'],
-          ['Zoe Agent', 'Y', 'Zoe Tab'],
-          ['Aaron Seller', 'Y', 'Aaron Tab']
+          ['Name', 'Tab', 'Active', 'Phone', 'Store', 'Default CTA', 'Region'],
+          ['Zoe Agent', 'Zoe Tab', 'Y', '', '', '', 'OMG'],
+          ['Aaron Seller', 'Aaron Tab', 'Y', '', '', '', 'OMG']
         ],
         UIMT: [[], []],
         'Zoe Tab': [['A', 'Stock #']]
@@ -122,7 +122,8 @@ describe('Apps Script spreadsheet behavior', () => {
         boatInfo: '2022 Tidewater 2410',
         stockNum: 'STK-101',
         salePrice: '$54,999',
-        hours: '120'
+        hours: '120',
+        store: ''
       }
     ]);
   });
@@ -133,13 +134,16 @@ describe('Apps Script spreadsheet behavior', () => {
     expect(context.getBoatDetails('OMG', 'STK-202')).toEqual({
       classification: 'Pontoon',
       boatInfo: '2021 Harris Cruiser',
+      store: '',
+      daysListed: '',
       stockNum: 'STK-202',
       price: '$32,999',
       hours: '',
       motorInfo: 'Mercury 150',
       options: 'Changing room',
       websiteDesc: 'Family pontoon with room to cruise',
-      websiteOptions: 'Bimini; Stereo'
+      websiteOptions: 'Bimini; Stereo',
+      images: []
     });
   });
 
@@ -212,7 +216,12 @@ describe('Apps Script spreadsheet behavior', () => {
   });
 
   it('retries transient OpenAI failures and returns generated text', () => {
-    const spreadsheetApp = createSpreadsheetApp({ [OMG_ID]: { Salespeople: [['Name', 'Active', 'Tab']], UIMT: [[], []] } });
+    const spreadsheetApp = createSpreadsheetApp({
+      [OMG_ID]: {
+        Salespeople: [['Name', 'Tab', 'Active', 'Phone', 'Store', 'Default CTA', 'Region']],
+        UIMT: [[], []]
+      }
+    });
     const context = loadAppsScriptFiles(['src/Code.js'], {
       SpreadsheetApp: spreadsheetApp,
       PropertiesService: createPropertiesService({ OPENAI_API_KEY: 'test-key' }),
@@ -228,7 +237,12 @@ describe('Apps Script spreadsheet behavior', () => {
   });
 
   it('throws a clean error when OpenAI returns invalid JSON', () => {
-    const spreadsheetApp = createSpreadsheetApp({ [OMG_ID]: { Salespeople: [['Name', 'Active', 'Tab']], UIMT: [[], []] } });
+    const spreadsheetApp = createSpreadsheetApp({
+      [OMG_ID]: {
+        Salespeople: [['Name', 'Tab', 'Active', 'Phone', 'Store', 'Default CTA', 'Region']],
+        UIMT: [[], []]
+      }
+    });
     const context = loadAppsScriptFiles(['src/Code.js'], {
       SpreadsheetApp: spreadsheetApp,
       PropertiesService: createPropertiesService({ OPENAI_API_KEY: 'test-key' }),

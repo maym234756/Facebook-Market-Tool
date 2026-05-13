@@ -1,0 +1,214 @@
+Analytics Row Collapse Options
+Date: 2026-05-11
+
+Purpose
+This document outlines safe options to reduce repeated status text in the Regional View / Analytics table without changing business logic, Google Sheets query logic, Salesforce embedding behavior, or Apps Script data-read behavior.
+
+Problem Summary
+Today the Analytics page mirrors the Google Sheet very literally.
+If a unit row has the same salesperson-side status across all salesperson columns, the UI repeats that same value in every salesperson cell.
+Examples seen in the current view:
+- In Contract
+- Consignment
+- <30
+
+This creates visual noise because the repeated value is not adding new information when every salesperson column is the same.
+
+Current Architecture Facts
+- Apps Script function getAnalyticsData reads a fixed sheet range and returns display values, backgrounds, and column widths.
+- The Analytics page renders those returned cells directly into an HTML table.
+- Salesforce does not build a separate analytics grid. It embeds the Apps Script Analytics page in an iframe.
+- Because of that, a visual-only change in the Analytics page would affect both the standalone Apps Script UI and the Salesforce Regional View, without changing backend data logic.
+
+Non-Negotiable Constraints
+The following should remain unchanged if the goal is zero business-logic risk:
+- No changes to Google Sheets formulas, query tabs, or source sheet structure.
+- No changes to Apps Script filtering rules in getAnalyticsData.
+- No changes to Salesforce Apex or LWC iframe logic.
+- No changes to the returned sheet values themselves.
+- No changes to salesperson eligibility logic such as Y/N rows.
+
+Option 1: UI-Only Cell Collapse Inside Analytics Page
+Summary
+Keep the backend response exactly as it is. Change only how the Analytics page draws the row.
+
+How it would work
+- Read the row exactly as returned today.
+- Detect the salesperson section of the table.
+- If every salesperson cell in that row contains the same repeated non-binary status value, render one wide visual cell across that salesperson section.
+- If the row contains mixed values such as Y and N, render normally with one cell per salesperson.
+
+What stays unchanged
+- Google Sheets logic
+- Apps Script analytics read logic
+- Salesforce embed logic
+- Returned data shape
+
+What changes
+- Only the browser rendering of repeated status rows
+
+Pros
+- Lowest-risk option
+- No backend contract changes
+- No Salesforce code changes
+- One fix covers both Apps Script and Salesforce because Salesforce uses the embedded Analytics page
+- Easy to reverse if needed
+
+Cons
+- The raw data is still repeated under the hood; only the display changes
+- Needs a small render rule so colspan logic does not interfere with normal rows
+
+Risk Level
+Low
+
+Best fit
+This is the safest option if the requirement is to avoid changing any actual logic.
+
+Option 2: UI-Only Helper Layer Separate From Main Renderer
+Summary
+Same idea as Option 1, but instead of putting the row-collapse rule directly into the main render function, isolate it in a helper module or included script.
+
+How it would work
+- Keep getAnalyticsData unchanged.
+- Keep the current renderer mostly unchanged.
+- Add a helper that inspects each row and returns display instructions such as:
+  - render normally
+  - render salesperson section as one grouped cell
+
+What stays unchanged
+- Backend data logic
+- Salesforce iframe logic
+- Google Sheets logic
+
+What changes
+- Front-end structure only
+
+Pros
+- Same low business risk as Option 1
+- Cleaner separation for future maintenance
+- Easier to test the grouping rule by itself
+
+Cons
+- Slightly more setup than Option 1
+- Still only a display-layer fix
+
+Risk Level
+Low
+
+Best fit
+Best if you want the safest path but prefer cleaner organization rather than embedding the rule directly in the main table renderer.
+
+Option 3: CSS-Led Visual Grouping Only
+Summary
+Keep every table cell in the DOM, but visually suppress repeated labels and show one centered overlay-like label across the repeated area.
+
+How it would work
+- Leave all cells structurally present.
+- Hide duplicate text in repeated salesperson cells.
+- Use CSS styling or an overlay element so the row appears grouped.
+
+What stays unchanged
+- Backend logic
+- Returned data shape
+- Salesforce embed logic
+
+What changes
+- Visual presentation only
+
+Pros
+- No backend risk
+- No changes to data structure
+
+Cons
+- Harder to make robust
+- More fragile for resizing, printing, scrolling, and accessibility
+- Can become messy when column widths change
+- Usually less clean than a real grouped cell render
+
+Risk Level
+Low to Medium
+
+Best fit
+Only worth considering if you want to avoid changing the render structure itself.
+
+Option 4: Apps Script Returns Extra Display Metadata
+Summary
+Keep the raw values but have Apps Script also return display hints about which rows can be visually grouped.
+
+How it would work
+- getAnalyticsData still returns the sheet values.
+- It also returns extra metadata, for example:
+  - row 12 salesperson cells can be collapsed
+  - label = Consignment
+  - span start = first salesperson column
+  - span width = number of salesperson columns
+- The frontend uses that metadata during rendering.
+
+What stays unchanged
+- Google Sheets formulas and source logic
+- Salesforce iframe model
+
+What changes
+- Apps Script response contract
+- Front-end render logic
+
+Pros
+- Cleaner separation between detection and rendering
+- Frontend logic becomes simpler
+
+Cons
+- This is no longer a pure display-only change
+- Any consumer of getAnalyticsData would need to tolerate the expanded response object
+- It introduces unnecessary backend involvement for a purely visual issue
+
+Risk Level
+Medium
+
+Best fit
+Only if you explicitly want the backend to own the grouping rule.
+This does not match the strictest interpretation of "do not change any logic."
+
+Option 5: Change the Google Sheet Layout or Use Merged Cells
+Summary
+Try to solve the repetition in the sheet itself.
+
+Why this is not recommended
+- The current Apps Script endpoint reads display values from a fixed rectangular range.
+- Sheet merges and display formatting do not reliably translate into the current HTML renderer in a clean way.
+- Changing the sheet structure risks side effects for formulas, maintenance workflows, and users who rely on the raw spreadsheet.
+- It pushes a UI concern into the source operational sheet.
+
+Risk Level
+High
+
+Best fit
+Not recommended for this requirement.
+
+Recommendation
+Recommended path: Option 1 or Option 2.
+
+Reason
+These are the only options that:
+- preserve Google Sheets logic
+- preserve Apps Script data logic
+- preserve Salesforce iframe behavior
+- avoid changing backend contracts
+- solve the problem where it actually exists, which is the final display layer
+
+Practical Display Rule
+If this is eventually implemented, the safest grouping rule would be:
+- Only examine the salesperson columns
+- Only collapse when every salesperson cell in that row contains the exact same repeated value
+- Do not collapse rows containing mixed Y/N values
+- Do not collapse rows containing blanks inside the salesperson section
+- Apply only to repeated status-style labels such as In Contract, Consignment, or <30
+
+Suggested Rollout Order
+1. Confirm the exact list of repeat-only values that should be collapsible.
+2. Implement the change only in the Analytics page display layer.
+3. Verify the same result in the standalone Apps Script page.
+4. Verify the same result inside the Salesforce iframe Regional View.
+5. Confirm that normal Y/N rows still render one cell per salesperson.
+
+Bottom Line
+If the goal is to improve readability without changing logic or risking cross-system breakage, the safest answer is a front-end-only grouping helper in the Analytics page. That approach leaves Google Sheets, Apps Script backend behavior, and Salesforce embedding behavior intact while removing the repeated visual clutter.

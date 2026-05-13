@@ -253,15 +253,20 @@ export default class FacebookListingCreate extends LightningElement {
     }
 
     _execCommandCopy() {
+        const textarea = this.template.querySelector('[data-role="clipboard-proxy"]');
+
+        if (!textarea) {
+            this.errorMessage = 'Could not copy to clipboard.';
+            return;
+        }
+
         try {
-            const ta = document.createElement('textarea');
-            ta.value = this.aiListing;
-            ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;';
-            document.body.appendChild(ta);
-            ta.focus();
-            ta.select();
+            textarea.value = this.aiListing;
+            textarea.focus();
+            textarea.select();
+            textarea.setSelectionRange(0, this.aiListing.length);
             const ok = document.execCommand('copy');
-            document.body.removeChild(ta);
+            textarea.blur();
             if (ok) {
                 this.successMessage = 'Listing copied to clipboard!';
             } else {
@@ -455,12 +460,18 @@ export default class FacebookListingCreate extends LightningElement {
 
     _triggerBrowserDownload(blob, fileName) {
         const objectUrl = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = objectUrl;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        const anchor = this.template.querySelector('[data-role="download-link"]');
+
+        if (!anchor) {
+            this.errorMessage = 'Could not start the photo download.';
+            this.successMessage = null;
+            URL.revokeObjectURL(objectUrl);
+            return;
+        }
+
+        anchor.href = objectUrl;
+        anchor.download = fileName;
+        anchor.click();
         setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
     }
 

@@ -2,7 +2,6 @@
 <html>
   <head>
     <base target="_top">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
       :root {
         --navy-900: #061a38;
@@ -114,6 +113,45 @@
       .muted {
         color: var(--slate-500);
         font-size: 13px;
+      }
+
+      .generator-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .generator-header-main {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .generator-status-stack {
+        display: none;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 6px;
+        min-width: 240px;
+        max-width: 320px;
+      }
+
+      .generator-status-line {
+        display: inline-flex;
+        justify-content: flex-end;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(15, 139, 109, 0.12);
+        color: var(--success);
+        font-size: 12px;
+        font-weight: 800;
+        line-height: 1.3;
+        text-align: right;
+      }
+
+      .generator-status-line.is-error {
+        background: rgba(180, 35, 24, 0.12);
+        color: var(--danger);
       }
 
       .nav {
@@ -335,6 +373,22 @@
         .photo-toolbar button {
           width: 100%;
         }
+
+        .generator-header {
+          flex-direction: column;
+        }
+
+        .generator-status-stack {
+          min-width: 0;
+          max-width: none;
+          width: 100%;
+          align-items: flex-start;
+        }
+
+        .generator-status-line {
+          justify-content: flex-start;
+          text-align: left;
+        }
       }
 
       /* ── Phone (portrait + landscape) ── */
@@ -425,13 +479,18 @@
           <span>|</span>
           <a id="navListings" href="#">Salesperson Listings</a>
           <span>|</span>
-          <a id="navAnalytics" href="#">Analytics</a>
+          <a id="navAnalytics" href="#">Regional View</a>
           <span>|</span>
-          <a id="navManager" href="#">Manager View</a>
+          <a id="navManager" href="#">Company-Wide View</a>
         </div>
 
-        <h1>Listing Generator</h1>
-        <div class="muted">Select a region, salesperson, class, and boat. Then generate and save the Marketplace listing.</div>
+        <div class="generator-header">
+          <div class="generator-header-main">
+            <h1>Listing Generator</h1>
+            <div class="muted">Select a region, salesperson, class, and boat. Then generate and save the Marketplace listing.</div>
+          </div>
+          <div id="generatorStatusStack" class="generator-status-stack" aria-live="polite"></div>
+        </div>
       </div>
 
       <div class="card">
@@ -445,8 +504,23 @@
 
           <div>
             <label for="salesperson">Salesperson</label>
-            <select id="salesperson">
+            <select id="salesperson" onchange="loadBoats()">
               <option value="">Select a salesperson</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="boatFilter">Boat Filter</label>
+            <select id="boatFilter" onchange="loadBoats()">
+              <option value="all">All Boats</option>
+              <option value="eligible">Eligible Only</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="storeFilter">Store</label>
+            <select id="storeFilter" onchange="loadBoats()">
+              <option value="">All Stores</option>
             </select>
           </div>
 
@@ -481,6 +555,11 @@
           <div>
             <label>Days Listed</label>
             <input id="daysListed" readonly>
+          </div>
+
+          <div>
+            <label>Store</label>
+            <input id="store" readonly>
           </div>
 
           <div>
@@ -554,6 +633,8 @@
           <button class="save-btn" onclick="saveListing()">Save Listing</button>
         </div>
 
+        <div id="status" class="status"></div>
+
         <div style="margin-top:16px;">
           <label>AI Generated Listing</label>
           <textarea id="aiListing" style="min-height:260px;"></textarea>
@@ -573,7 +654,6 @@
           </div>
         </div>
 
-        <div id="status" class="status"></div>
       </div>
     </div>
 
@@ -589,11 +669,69 @@
           : '';
       })();
       var regionLoadToken = 0;
+      var headerStatusEntries = {};
+      var headerStatusOrder = ['region', 'boats'];
 
       function setStatus(message, isError) {
         var el = document.getElementById('status');
         el.textContent = message || '';
         el.style.color = isError ? '#b42318' : '#0f8b6d';
+      }
+
+      function setHeaderStatus(key, message, isError) {
+        if (!key) {
+          return;
+        }
+
+        if (!message) {
+          delete headerStatusEntries[key];
+          renderHeaderStatusStack();
+          return;
+        }
+
+        headerStatusEntries[key] = {
+          message: String(message),
+          isError: !!isError
+        };
+        renderHeaderStatusStack();
+      }
+
+      function clearHeaderStatus(key) {
+        setHeaderStatus(key, '');
+      }
+
+      function renderHeaderStatusStack() {
+        var stack = document.getElementById('generatorStatusStack');
+        if (!stack) {
+          return;
+        }
+
+        stack.innerHTML = '';
+
+        var orderedKeys = headerStatusOrder.filter(function(key) {
+          return !!headerStatusEntries[key];
+        }).concat(Object.keys(headerStatusEntries).filter(function(key) {
+          return headerStatusOrder.indexOf(key) === -1;
+        }));
+
+        if (!orderedKeys.length) {
+          stack.style.display = 'none';
+          return;
+        }
+
+        orderedKeys.forEach(function(key) {
+          var item = headerStatusEntries[key];
+          if (!item || !item.message) {
+            return;
+          }
+
+          var line = document.createElement('div');
+          line.className = 'generator-status-line' + (item.isError ? ' is-error' : '');
+          line.textContent = item.message;
+          stack.appendChild(line);
+        });
+
+        stack.style.display = stack.childElementCount ? 'flex' : 'none';
       }
 
       function getRegionFromUrl() {
@@ -710,24 +848,16 @@
                 return;
               }
 
-              var zip = new JSZip();
-
-              validFiles.forEach(function(file, index) {
-                var bytes = base64ToUint8Array(file.base64);
-                zip.file(file.fileName || ('photo-' + (index + 1)), bytes, { binary: true });
+              var entries = validFiles.map(function(file, index) {
+                return {
+                  name: file.fileName || ('photo-' + (index + 1)),
+                  bytes: base64ToUint8Array(file.base64)
+                };
               });
 
-              var content = await zip.generateAsync({ type: 'blob' });
-              var objectUrl = URL.createObjectURL(content);
-              var a = document.createElement('a');
-
-              a.href = objectUrl;
-              a.download = zipName;
-              document.body.appendChild(a);
-              a.click();
-              document.body.removeChild(a);
-
-              URL.revokeObjectURL(objectUrl);
+              var zipBytes = buildStoreZip(entries);
+              var content = new Blob([zipBytes], { type: 'application/zip' });
+              triggerBrowserDownload(content, zipName);
 
               var failedCount = files.length - validFiles.length;
               if (failedCount > 0) {
@@ -760,6 +890,7 @@
         document.getElementById('classification').value = '';
         document.getElementById('boatInfo').value = '';
         document.getElementById('daysListed').value = '';
+        document.getElementById('store').value = '';
         document.getElementById('stockNum').value = '';
         document.getElementById('price').value = '';
         document.getElementById('hours').value = '';
@@ -774,10 +905,13 @@
       function clearSelectorsAfterRegion() {
         document.getElementById('salesperson').innerHTML = '<option value="">Select a salesperson</option>';
         document.getElementById('boatClass').innerHTML = '<option value="">Select a class</option>';
+        document.getElementById('storeFilter').innerHTML = '<option value="">All Stores</option>';
         document.getElementById('boat').innerHTML = '<option value="">Select a boat</option>';
         document.getElementById('bmbBoard').value = '';
         document.getElementById('video').value = '';
         document.getElementById('link').value = '';
+        clearHeaderStatus('region');
+        clearHeaderStatus('boats');
         clearBoatDetails();
       }
 
@@ -807,6 +941,25 @@
           option.textContent = name;
           select.appendChild(option);
         });
+      }
+
+      function populateStores(stores) {
+        var select = document.getElementById('storeFilter');
+        select.innerHTML = '<option value="">All Stores</option>';
+
+        (stores || [])
+          .map(function(store) {
+            return String(store || '').trim();
+          })
+          .filter(function(store) {
+            return store && store.toLowerCase() !== 'undefined';
+          })
+          .forEach(function(store) {
+            var option = document.createElement('option');
+            option.value = store;
+            option.textContent = store;
+            select.appendChild(option);
+          });
       }
 
       function populateClasses(classes) {
@@ -842,10 +995,11 @@
         }
 
         var loadToken = ++regionLoadToken;
-        var pendingRequests = 2;
+        var pendingRequests = 3;
         var hasError = false;
 
-        setStatus('Loading region data...');
+        setStatus('Loading region data.');
+        setHeaderStatus('region', 'Loading region data.');
 
         google.script.run
           .withSuccessHandler(function(salespeople) {
@@ -858,6 +1012,7 @@
 
             if (pendingRequests === 0) {
               setStatus('');
+              loadBoats();
             }
           })
           .withFailureHandler(function(err) {
@@ -866,6 +1021,8 @@
             }
 
             hasError = true;
+            clearHeaderStatus('region');
+            clearHeaderStatus('boats');
             setStatus((err && err.message) ? err.message : 'Failed to load salespeople.', true);
           })
           .getRegionSalespeople(currentRegion);
@@ -881,6 +1038,7 @@
 
             if (pendingRequests === 0) {
               setStatus('');
+              loadBoats();
             }
           })
           .withFailureHandler(function(err) {
@@ -889,30 +1047,76 @@
             }
 
             hasError = true;
+            clearHeaderStatus('region');
+            clearHeaderStatus('boats');
             setStatus((err && err.message) ? err.message : 'Failed to load classes.', true);
           })
           .getRegionClasses(currentRegion);
+
+        google.script.run
+          .withSuccessHandler(function(stores) {
+            if (loadToken !== regionLoadToken || hasError) {
+              return;
+            }
+
+            populateStores(stores || []);
+            pendingRequests -= 1;
+
+            if (pendingRequests === 0) {
+              setStatus('');
+              loadBoats();
+            }
+          })
+          .withFailureHandler(function(err) {
+            if (loadToken !== regionLoadToken || hasError) {
+              return;
+            }
+
+            hasError = true;
+            clearHeaderStatus('region');
+            clearHeaderStatus('boats');
+            setStatus((err && err.message) ? err.message : 'Failed to load stores.', true);
+          })
+          .getStores(currentRegion);
       }
 
       function loadBoats() {
         clearBoatDetails();
 
         if (!currentRegion) {
+          clearHeaderStatus('region');
+          clearHeaderStatus('boats');
           setStatus('Select a region first.', true);
           return;
         }
 
-        var className = document.getElementById('boatClass').value;
+        var className = document.getElementById('boatClass').value || '';
+        var salespersonName = document.getElementById('salesperson').value || '';
+        var boatFilter = document.getElementById('boatFilter').value || 'all';
+        var storeFilter = document.getElementById('storeFilter').value || '';
+
         var boatSelect = document.getElementById('boat');
         boatSelect.innerHTML = '<option value="">Select a boat</option>';
 
-        if (!className) {
+        if (boatFilter === 'eligible' && !salespersonName) {
+          clearHeaderStatus('boats');
+          setStatus('Select a salesperson first to load eligible boats.', true);
           return;
         }
 
-        setStatus('Loading boats...');
+        setHeaderStatus(
+          'boats',
+          boatFilter === 'eligible'
+            ? 'Loading eligible boats...'
+            : 'Loading all boats...'
+        );
+        setStatus(
+          boatFilter === 'eligible'
+            ? 'Loading eligible boats...'
+            : 'Loading all boats...'
+        );
 
-        google.script.run
+        var runner = google.script.run
           .withSuccessHandler(function(boats) {
             boatSelect.innerHTML = '<option value="">Select a boat</option>';
 
@@ -923,14 +1127,22 @@
               boatSelect.appendChild(option);
             });
 
+            clearHeaderStatus('region');
+            clearHeaderStatus('boats');
             setStatus('');
           })
           .withFailureHandler(function(err) {
+            clearHeaderStatus('region');
+            clearHeaderStatus('boats');
             setStatus((err && err.message) ? err.message : 'Failed to load boats.', true);
-          })
-          .getBoatsByClass(currentRegion, className);
-      }
+          });
 
+        if (boatFilter === 'eligible') {
+          runner.getEligibleBoats(currentRegion, salespersonName, className, storeFilter);
+        } else {
+          runner.getBoatsByClass(currentRegion, className, storeFilter);
+        }
+      }
       function loadBoatDetails() {
         clearBoatDetails();
 
@@ -956,6 +1168,7 @@
             document.getElementById('classification').value = data.classification || '';
             document.getElementById('boatInfo').value = data.boatInfo || '';
             document.getElementById('daysListed').value = data.daysListed || '';
+            document.getElementById('store').value = data.store || '';
             document.getElementById('stockNum').value = data.stockNum || '';
             document.getElementById('price').value = data.price || '';
             document.getElementById('hours').value = data.hours || '';
@@ -1032,9 +1245,40 @@
           return;
         }
 
-        navigator.clipboard.writeText(text).then(function() {
-          setStatus('Listing copied.');
-        });
+        try {
+          if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+            navigator.clipboard.writeText(text)
+              .then(function() {
+                setStatus('Listing copied.');
+              })
+              .catch(function() {
+                execCommandCopy(text);
+              });
+          } else {
+            execCommandCopy(text);
+          }
+        } catch (err) {
+          execCommandCopy(text);
+        }
+      }
+
+      function execCommandCopy(text) {
+        var textarea = document.getElementById('aiListing');
+
+        try {
+          textarea.focus();
+          textarea.select();
+          textarea.setSelectionRange(0, text.length);
+
+          if (document.execCommand('copy')) {
+            setStatus('Listing copied.');
+            return;
+          }
+        } catch (err) {
+          // Fall through to the manual-copy message below.
+        }
+
+        setStatus('Clipboard access was blocked. The listing text is selected so you can copy it manually.', true);
       }
 
       function saveListing() {
@@ -1075,6 +1319,136 @@
             setStatus((err && err.message) ? err.message : 'Failed to save listing.', true);
           })
           .saveListing(currentRegion, payload);
+      }
+
+      function triggerBrowserDownload(blob, fileName) {
+        var objectUrl = URL.createObjectURL(blob);
+        var anchor = document.createElement('a');
+
+        anchor.href = objectUrl;
+        anchor.download = fileName;
+        anchor.style.display = 'none';
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+
+        setTimeout(function() {
+          URL.revokeObjectURL(objectUrl);
+        }, 1000);
+      }
+
+      function buildStoreZip(entries) {
+        var encoder = new TextEncoder();
+        var localParts = [];
+        var centralParts = [];
+        var centralRecords = [];
+        var offset = 0;
+
+        entries.forEach(function(entry) {
+          var nameBytes = encoder.encode(entry.name);
+          var data = entry.bytes;
+          var crc = crc32(data);
+          var size = data.length;
+
+          var localHeader = new Uint8Array(30 + nameBytes.length);
+          var localView = new DataView(localHeader.buffer);
+          localView.setUint32(0, 0x04034b50, true);
+          localView.setUint16(4, 20, true);
+          localView.setUint16(6, 0x0800, true);
+          localView.setUint16(8, 0, true);
+          localView.setUint16(10, 0, true);
+          localView.setUint16(12, 0x0021, true);
+          localView.setUint32(14, crc >>> 0, true);
+          localView.setUint32(18, size, true);
+          localView.setUint32(22, size, true);
+          localView.setUint16(26, nameBytes.length, true);
+          localView.setUint16(28, 0, true);
+          localHeader.set(nameBytes, 30);
+
+          localParts.push(localHeader, data);
+          centralRecords.push({
+            nameBytes: nameBytes,
+            crc: crc,
+            size: size,
+            offset: offset
+          });
+          offset += localHeader.length + size;
+        });
+
+        var centralStart = offset;
+        centralRecords.forEach(function(record) {
+          var centralHeader = new Uint8Array(46 + record.nameBytes.length);
+          var centralView = new DataView(centralHeader.buffer);
+          centralView.setUint32(0, 0x02014b50, true);
+          centralView.setUint16(4, 20, true);
+          centralView.setUint16(6, 20, true);
+          centralView.setUint16(8, 0x0800, true);
+          centralView.setUint16(10, 0, true);
+          centralView.setUint16(12, 0, true);
+          centralView.setUint16(14, 0x0021, true);
+          centralView.setUint32(16, record.crc >>> 0, true);
+          centralView.setUint32(20, record.size, true);
+          centralView.setUint32(24, record.size, true);
+          centralView.setUint16(28, record.nameBytes.length, true);
+          centralView.setUint16(30, 0, true);
+          centralView.setUint16(32, 0, true);
+          centralView.setUint16(34, 0, true);
+          centralView.setUint16(36, 0, true);
+          centralView.setUint32(38, 0, true);
+          centralView.setUint32(42, record.offset, true);
+          centralHeader.set(record.nameBytes, 46);
+          centralParts.push(centralHeader);
+          offset += centralHeader.length;
+        });
+
+        var centralSize = offset - centralStart;
+        var eocd = new Uint8Array(22);
+        var eocdView = new DataView(eocd.buffer);
+        eocdView.setUint32(0, 0x06054b50, true);
+        eocdView.setUint16(4, 0, true);
+        eocdView.setUint16(6, 0, true);
+        eocdView.setUint16(8, centralRecords.length, true);
+        eocdView.setUint16(10, centralRecords.length, true);
+        eocdView.setUint32(12, centralSize, true);
+        eocdView.setUint32(16, centralStart, true);
+        eocdView.setUint16(20, 0, true);
+
+        var total = offset + eocd.length;
+        var out = new Uint8Array(total);
+        var position = 0;
+
+        localParts.forEach(function(part) {
+          out.set(part, position);
+          position += part.length;
+        });
+
+        centralParts.forEach(function(part) {
+          out.set(part, position);
+          position += part.length;
+        });
+
+        out.set(eocd, position);
+        return out;
+      }
+
+      var crcTable = null;
+      function crc32(bytes) {
+        if (!crcTable) {
+          crcTable = new Uint32Array(256);
+          for (var n = 0; n < 256; n++) {
+            var c = n;
+            for (var k = 0; k < 8; k++) {
+              c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+            }
+            crcTable[n] = c >>> 0;
+          }
+        }
+
+        var crc = 0xffffffff;
+        for (var i = 0; i < bytes.length; i++) {
+          crc = (crcTable[(crc ^ bytes[i]) & 0xff] ^ (crc >>> 8)) >>> 0;
+        }
+        return (crc ^ 0xffffffff) >>> 0;
       }
 
       function init() {

@@ -69,9 +69,25 @@
                 </template>
             </lightning-tab>
 
-            <!-- CREATE LISTING tab — native Salesforce form -->
-            <lightning-tab label="Listing Generator" value="create">
-                <c-facebook-listing-create></c-facebook-listing-create>
+            <!-- LISTING GENERATOR tab -->
+            <lightning-tab label="Listing Generator" value="index">
+                <template lwc:if={indexLoading}>
+                    <div class="spinner-wrap">
+                        <lightning-spinner alternative-text="Loading…" size="large"></lightning-spinner>
+                    </div>
+                </template>
+                <template lwc:if={indexError}>
+                    <div class="error-box">
+                        <lightning-icon icon-name="utility:error" variant="error" size="small"></lightning-icon>
+                        <span>{indexError}</span>
+                    </div>
+                </template>
+                <template lwc:if={indexUrl}>
+                    <iframe title="Listing Generator" src={indexUrl} class="listing-frame"
+                        sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-downloads"
+                        allow="clipboard-write"
+                        allowfullscreen referrerpolicy="no-referrer-when-downgrade"></iframe>
+                </template>
             </lightning-tab>
 
         </lightning-tabset>

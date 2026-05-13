@@ -1,4 +1,4 @@
-import crypto from 'node:crypto';
+import * as crypto from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { loadAppsScriptFiles } from './support/load-apps-script.js';
 

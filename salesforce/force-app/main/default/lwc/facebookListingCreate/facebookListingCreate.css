@@ -20,6 +20,7 @@
     border-radius: 18px;
     padding: 18px 22px;
     margin-bottom: 18px;
+    -webkit-backdrop-filter: blur(4px);
     backdrop-filter: blur(4px);
 }
 
@@ -198,6 +199,15 @@
 .spinner-label {
     font-size: 13px;
     color: #5a7898;
+}
+
+.clipboard-proxy,
+.download-link {
+    position: fixed;
+    top: -9999px;
+    left: -9999px;
+    opacity: 0;
+    pointer-events: none;
 }
 
 .photo-toolbar {

@@ -44,7 +44,9 @@ const COL = {
   secondaryClasses: 45,  // AS
   usedOptions: 47,       // AU
   motorInfo: 48,         // AV
-  daysListed: 49         // AW
+  daysListed: 49,        // AW
+  store: 51,             // AY
+  status: 46             // AT
 };
 
 const NON_SALESPERSON_TABS = [
@@ -383,51 +385,88 @@ function getClasses_(region) {
   return Array.from(set).sort((a, b) => a.localeCompare(b));
 }
 
-function getBoatsByClass(region, className) {
+function getBoatsByClass(region, className, storeFilter) {
   if (!region) throw new Error("No region selected.");
-  if (!className) return [];
+
+  const selectedClass = String(className || "").trim();
+  const selectedStore = normalizeText_(storeFilter);
 
   const sheet = getDataSheet_(region);
   const lastRow = sheet.getLastRow();
   if (lastRow < FIRST_DATA_ROW) return [];
 
-  const width = COL.motorInfo - COL.boatInfo + 1;
+  const startCol = Math.min(
+    COL.boatInfo,
+    COL.salePrice,
+    COL.stockNum,
+    COL.hours,
+    COL.primaryClass,
+    COL.secondaryClasses,
+    COL.store
+  );
+
+  const endCol = Math.max(
+    COL.boatInfo,
+    COL.salePrice,
+    COL.stockNum,
+    COL.hours,
+    COL.primaryClass,
+    COL.secondaryClasses,
+    COL.store
+  );
+
   const values = sheet.getRange(
     FIRST_DATA_ROW,
-    COL.boatInfo,
+    startCol,
     lastRow - FIRST_DATA_ROW + 1,
-    width
+    endCol - startCol + 1
   ).getValues();
 
+  function getCell(row, colNumber) {
+    return row[colNumber - startCol];
+  }
+
   return values
-    .map(row => {
-      const boatInfo = row[0];          // AK
-      const salePrice = row[2];         // AM
-      const stockNum = row[3];          // AN
-      const hours = row[6];             // AQ
-      const primaryClass = row[7];      // AR
-      const secondaryClasses = row[8];  // AS
+    .map(function(row) {
+      const boatInfo = getCell(row, COL.boatInfo);
+      const salePrice = getCell(row, COL.salePrice);
+      const stockNum = getCell(row, COL.stockNum);
+      const hours = getCell(row, COL.hours);
+      const primaryClass = getCell(row, COL.primaryClass);
+      const secondaryClasses = getCell(row, COL.secondaryClasses);
+      const boatStore = getCell(row, COL.store);
+
+      if (!boatInfo || !stockNum) return null;
+
+      if (selectedStore && normalizeText_(boatStore) !== selectedStore) {
+        return null;
+      }
 
       const matchesPrimary =
-        String(primaryClass || "").trim() === String(className || "").trim();
+        String(primaryClass || "").trim() === selectedClass;
 
       const matchesSecondary =
         String(secondaryClasses || "")
           .split(";")
-          .map(s => s.trim())
-          .includes(String(className || "").trim());
+          .map(function(s) { return s.trim(); })
+          .includes(selectedClass);
 
-      if (!boatInfo || (!matchesPrimary && !matchesSecondary)) return null;
+      if (selectedClass && !matchesPrimary && !matchesSecondary) {
+        return null;
+      }
 
       return {
         boatInfo: String(boatInfo),
         stockNum: String(stockNum || ""),
         salePrice: formatPrice_(salePrice),
-        hours: hours === "" || hours == null ? "" : String(hours)
+        hours: hours === "" || hours == null ? "" : String(hours),
+        store: String(boatStore || "")
       };
     })
     .filter(Boolean)
-    .sort((a, b) => a.boatInfo.localeCompare(b.boatInfo));
+    .sort(function(a, b) {
+      return a.boatInfo.localeCompare(b.boatInfo);
+    });
 }
 
 function getBoatDetails(region, stockNum) {
@@ -459,23 +498,57 @@ function getBoatDetails(region, stockNum) {
   }
 
   const width = COL.daysListed - COL.boatInfo + 1;
-  const row = sheet.getRange(
-    FIRST_DATA_ROW + matchOffset,
-    COL.boatInfo,
-    1,
-    width
-  ).getValues()[0];
 
-  const boatInfo = row[0];         // AK
-  const salePrice = row[2];        // AM
-  const currentStock = row[3];     // AN
-  const websiteDesc = row[4];      // AO
-  const websiteOptions = row[5];   // AP
-  const hours = row[6];            // AQ
-  const primaryClass = row[7];     // AR
-  const usedOptions = row[10];     // AU
-  const motorInfo = row[11];       // AV
-  const daysListed = row[12];      // AW
+const startCol = Math.min(
+  COL.boatInfo,
+  COL.salePrice,
+  COL.stockNum,
+  COL.websiteDesc,
+  COL.websiteOptions,
+  COL.hours,
+  COL.primaryClass,
+  COL.usedOptions,
+  COL.motorInfo,
+  COL.daysListed,
+  COL.store
+);
+
+const endCol = Math.max(
+  COL.boatInfo,
+  COL.salePrice,
+  COL.stockNum,
+  COL.websiteDesc,
+  COL.websiteOptions,
+  COL.hours,
+  COL.primaryClass,
+  COL.usedOptions,
+  COL.motorInfo,
+  COL.daysListed,
+  COL.store
+);
+
+const row = sheet.getRange(
+  FIRST_DATA_ROW + matchOffset,
+  startCol,
+  1,
+  endCol - startCol + 1
+).getValues()[0];
+
+function getCell(colNumber) {
+  return row[colNumber - startCol];
+}
+
+const boatInfo = getCell(COL.boatInfo);
+const salePrice = getCell(COL.salePrice);
+const currentStock = getCell(COL.stockNum);
+const websiteDesc = getCell(COL.websiteDesc);
+const websiteOptions = getCell(COL.websiteOptions);
+const hours = getCell(COL.hours);
+const primaryClass = getCell(COL.primaryClass);
+const usedOptions = getCell(COL.usedOptions);
+const motorInfo = getCell(COL.motorInfo);
+const daysListed = getCell(COL.daysListed);
+const store = getCell(COL.store);
 
   const IMAGE_START_COL = 53; // BA
   const IMAGE_COL_COUNT = 66; // BA:DN
@@ -494,6 +567,7 @@ function getBoatDetails(region, stockNum) {
   return {
     classification: String(primaryClass || ""),
     boatInfo: String(boatInfo || ""),
+    store: String(store || ""),
     daysListed: String(daysListed || ""),
     stockNum: String(currentStock || ""),
     price: formatPrice_(salePrice),
@@ -745,6 +819,39 @@ function getSalespersonListings(region, salespersonName) {
       H: values[0] && values[0][7] ? values[0][7] : "Column H"
     }
   };
+}
+
+function getStores(region) {
+  if (!region) throw new Error("No region selected.");
+
+  const sheet = getDataSheet_(region);
+  const lastRow = sheet.getLastRow();
+  if (lastRow < FIRST_DATA_ROW) return [];
+
+  const values = sheet.getRange(
+    FIRST_DATA_ROW,
+    COL.store,
+    lastRow - FIRST_DATA_ROW + 1,
+    1
+  ).getValues();
+
+  const set = new Set();
+
+  values.forEach(function(row) {
+    const store = String(row[0] || "").trim();
+
+    if (
+      store &&
+      store.toLowerCase() !== "undefined" &&
+      store.toLowerCase() !== "null"
+    ) {
+      set.add(store);
+    }
+  });
+
+  return Array.from(set).sort(function(a, b) {
+    return a.localeCompare(b);
+  });
 }
 
 function clearSalespersonListing(region, salespersonName, rowNumber) {
@@ -1201,14 +1308,28 @@ function getSalespersonConfig_(region) {
   if (!EXECUTION_CACHE.salespersonConfigByRegion[region]) {
     const sheet = getSalespeopleSheet_(region);
     const lastRow = sheet.getLastRow();
-    const values = lastRow < 2 ? [] : sheet.getRange(2, 1, lastRow - 1, 3).getValues();
+
+    // Salespeople sheet structure:
+    // A = Salesperson Name
+    // B = Tab Name
+    // C = Active
+    // D = Phone Number
+    // E = Store
+    // F = Default CTA
+    // G = Region
+    const values = lastRow < 2 ? [] : sheet.getRange(2, 1, lastRow - 1, 7).getValues();
+
     const byDisplayName = {};
     const activeSalespeople = [];
 
     for (let i = 0; i < values.length; i++) {
-      const displayName = String(values[i][0] || '').trim();
-      const isActive = String(values[i][1] || '').trim().toUpperCase() === 'Y';
-      const tabName = String(values[i][2] || '').trim();
+      const displayName = String(values[i][0] || '').trim(); // Column A
+      const tabName = String(values[i][1] || '').trim();     // Column B
+      const isActive = String(values[i][2] || '').trim().toUpperCase() === 'Y'; // Column C
+      const phone = String(values[i][3] || '').trim();       // Column D
+      const store = String(values[i][4] || '').trim();       // Column E
+      const defaultCta = String(values[i][5] || '').trim();  // Column F
+      const salespersonRegion = String(values[i][6] || '').trim(); // Column G
 
       if (!displayName) {
         continue;
@@ -1216,10 +1337,17 @@ function getSalespersonConfig_(region) {
 
       byDisplayName[displayName] = {
         isActive: isActive,
-        tabName: tabName
+        tabName: tabName,
+        phone: phone,
+        store: store,
+        defaultCta: defaultCta,
+        region: salespersonRegion
       };
 
-      if (isActive) {
+      if (
+        isActive &&
+        salespersonRegion.toLowerCase() === String(region || '').trim().toLowerCase()
+      ) {
         activeSalespeople.push(displayName);
       }
     }
@@ -1236,6 +1364,140 @@ function getSalespersonConfig_(region) {
   }
 
   return EXECUTION_CACHE.salespersonConfigByRegion[region];
+}
+function SHEET_NAME() {
+  return SpreadsheetApp.getActiveSpreadsheet().getActiveSheet().getName();
+}
+
+function getEligibleBoats(region, salespersonName, className, storeFilter) {
+  if (!region) throw new Error("No region selected.");
+  if (!salespersonName) throw new Error("No salesperson selected.");
+
+  const selectedClass = String(className || "").trim();
+  const selectedStore = normalizeText_(storeFilter);
+
+  const salespersonConfig = getSalespersonConfig_(region);
+  const salesperson = salespersonConfig.byDisplayName[String(salespersonName || "").trim()];
+
+  if (!salesperson) {
+    throw new Error("Salesperson not found: " + salespersonName);
+  }
+
+  const salespersonStores = String(salesperson.store || "")
+    .split(";")
+    .map(function(store) {
+      return normalizeText_(store);
+    })
+    .filter(Boolean);
+
+  const sheet = getDataSheet_(region);
+  const lastRow = sheet.getLastRow();
+  if (lastRow < FIRST_DATA_ROW) return [];
+
+  const startCol = Math.min(
+    COL.boatInfo,
+    COL.salePrice,
+    COL.stockNum,
+    COL.hours,
+    COL.primaryClass,
+    COL.secondaryClasses,
+    COL.daysListed,
+    COL.store,
+    COL.status
+  );
+
+  const endCol = Math.max(
+    COL.boatInfo,
+    COL.salePrice,
+    COL.stockNum,
+    COL.hours,
+    COL.primaryClass,
+    COL.secondaryClasses,
+    COL.daysListed,
+    COL.store,
+    COL.status
+  );
+
+  const values = sheet.getRange(
+    FIRST_DATA_ROW,
+    startCol,
+    lastRow - FIRST_DATA_ROW + 1,
+    endCol - startCol + 1
+  ).getValues();
+
+  function getCell(row, colNumber) {
+    return row[colNumber - startCol];
+  }
+
+  return values
+    .map(function(row) {
+      const boatInfo = getCell(row, COL.boatInfo);
+      const salePrice = getCell(row, COL.salePrice);
+      const stockNum = getCell(row, COL.stockNum);
+      const hours = getCell(row, COL.hours);
+      const primaryClass = getCell(row, COL.primaryClass);
+      const secondaryClasses = getCell(row, COL.secondaryClasses);
+      const daysListed = getCell(row, COL.daysListed);
+      const boatStore = getCell(row, COL.store);
+      const status = getCell(row, COL.status);
+
+      if (!boatInfo || !stockNum) return null;
+
+      if (selectedStore && normalizeText_(boatStore) !== selectedStore) {
+        return null;
+      }
+
+      const matchesPrimary =
+        String(primaryClass || "").trim() === selectedClass;
+
+      const matchesSecondary =
+        String(secondaryClasses || "")
+          .split(";")
+          .map(function(s) { return s.trim(); })
+          .includes(selectedClass);
+
+      if (selectedClass && !matchesPrimary && !matchesSecondary) {
+        return null;
+      }
+
+      const normalizedBoatStore = normalizeText_(boatStore);
+      const sameStore = salespersonStores.indexOf(normalizedBoatStore) !== -1;
+
+      const normalizedStatus = normalizeText_(status);
+      const isInContract = normalizedStatus === "in contract";
+
+      const isCON = String(stockNum || "")
+        .toUpperCase()
+        .indexOf("CON") !== -1;
+
+      const isUnder30 = Number(daysListed || 0) < 30;
+
+      const eligible =
+        !isInContract &&
+        (sameStore || !isCON) &&
+        (sameStore || !isUnder30);
+
+      if (!eligible) return null;
+
+      return {
+        boatInfo: String(boatInfo),
+        stockNum: String(stockNum || ""),
+        salePrice: formatPrice_(salePrice),
+        hours: hours === "" || hours == null ? "" : String(hours),
+        store: String(boatStore || "")
+      };
+    })
+    .filter(Boolean)
+    .sort(function(a, b) {
+      return a.boatInfo.localeCompare(b.boatInfo);
+    });
+}
+
+function normalizeText_(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
 }
 
 /*

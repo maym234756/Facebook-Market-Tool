@@ -41,9 +41,19 @@ In the Apps Script editor → Project Settings → Script Properties, add:
 
 ### 4 — Deploy the Salesforce package
 ```bash
+npm run salesforce:org:list
+npm run salesforce:deploy:validate -- --target-org myOrg
+npm run salesforce:deploy:quick -- --job-id <validationJobId>
+npm run salesforce:deploy -- --target-org myOrg
+```
+
+Direct CLI equivalent:
+```bash
 cd salesforce
 sf org login web --alias myOrg           # skip if already authenticated
-sf project deploy start --target-org myOrg
+sf project deploy validate --source-dir force-app --target-org myOrg
+sf project deploy quick --job-id <validationJobId>
+sf project deploy start --source-dir force-app --target-org myOrg
 ```
 
 ### 5 — Configure the Custom Setting

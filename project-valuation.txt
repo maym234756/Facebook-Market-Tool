@@ -1,0 +1,291 @@
+FACEBOOK MARKET TOOL - PROJECT VALUATION
+Date: 2026-05-12
+
+Purpose
+This document estimates how much the current project is worth as a software asset.
+It is based on the repository's visible scope, code volume, integrations, testing,
+deployment evidence, and technical risk profile.
+
+This is not a revenue multiple or investor valuation.
+It is an engineering and asset valuation based on replacement cost and current
+fair market value for a custom internal business system.
+
+
+1. EXECUTIVE VALUATION SUMMARY
+
+Recommended current project value: $75,000
+
+Reasonable fair-market range: $60,000 to $95,000
+
+Estimated rebuild / replacement cost: $110,000 to $140,000
+
+Quick-sale / asset-only floor: $25,000 to $40,000
+
+Best interpretation:
+- If someone needed this exact system rebuilt for internal use, they would likely
+  spend around $120,000.
+- Because the current codebase still carries platform and hardening risk, its
+  present fair value as an asset is lower than rebuild cost.
+- A practical headline number for negotiations is $75,000, with supportable room
+  to argue into the $85,000 to $95,000 range if the buyer strongly values the
+  Salesforce + Apps Script + Google Sheets workflow that already exists.
+
+
+2. WHAT THIS PROJECT ALREADY INCLUDES
+
+Based on the repository, this is not a simple script. It is a multi-surface
+business tool with production deployment workflow and cross-platform integration.
+
+Observed asset scope:
+- Google Apps Script web application in src/
+- Multi-page UI including Listings, Analytics, Manager, Project Updates, and
+  landing/index pages
+- Server-side Apps Script backend logic in Code.js
+- OpenAI-backed listing generation flow
+- Google Sheets data read/write workflow for operational inventory and listings
+- Salesforce package with Apex classes, Lightning Web Components, custom objects,
+  settings, and tab integration
+- Signed iframe embed model for securely loading Apps Script inside Salesforce
+- Async generation job infrastructure in Salesforce metadata and Apex
+- Local build, push, pull, typecheck, and test workflow
+- Automated test coverage for spreadsheet behavior, smoke checks, and Salesforce
+  embed security behavior
+- Deployment and operations documentation spread across the repo
+
+Measured implementation surface from the repo:
+- 51 implementation/test files across src, tests, and Salesforce metadata
+- About 8,996 total lines in the main implementation surface
+- About 5,796 lines in the Apps Script source layer
+- About 2,390 lines in Salesforce classes, LWC files, and object metadata
+- About 775 lines in tests and test support
+
+This matters because the project's value is driven more by integration depth,
+workflow coverage, and operational maturity than by raw line count alone.
+
+
+3. VALUATION METHOD USED
+
+I used three valuation lenses:
+
+Method A - Replacement cost
+What it would likely cost to rebuild this to comparable functionality using a
+competent contractor or small product team.
+
+Method B - Current fair market value
+What the existing codebase is reasonably worth today, after discounting for
+technical debt, platform concentration, and incomplete roadmap items.
+
+Method C - Quick-sale floor
+What the code and documentation may fetch if sold fast as a useful internal tool
+template without deep transition support.
+
+Because there is no revenue, profit, customer contract list, or active user-count
+history in the repo, I am not applying SaaS multiples, DCF, or ARR-based methods.
+
+
+4. REPLACEMENT COST BREAKDOWN
+
+Estimated rebuild assumptions:
+- Senior or mid-senior contractor mix
+- Blended hourly rate: $115 to $140 depending on specialty
+- Goal: reach roughly the current repo state, not a perfect enterprise rewrite
+
+Estimated effort by workstream:
+
+1) Discovery, architecture, workflow mapping
+- 50 to 80 hours
+- Estimated value: $6,000 to $10,000
+
+2) Apps Script backend and Google Sheets data layer
+- Includes auth/signature handling, spreadsheet reads/writes, caching patterns,
+  listing save/update flows, data access helpers, and operational logic
+- 180 to 250 hours
+- Estimated value: $22,000 to $32,000
+
+3) Apps Script front-end pages and UX flow
+- Includes Listings, Analytics, Manager, Index, Project Updates, and the shared
+  interaction/state logic embedded in those pages
+- 160 to 230 hours
+- Estimated value: $18,000 to $30,000
+
+4) OpenAI and media-related integration work
+- Includes AI listing generation path, error handling, retries, and image-related
+  utility work visible in ImageExtractor.js and related docs
+- 60 to 90 hours
+- Estimated value: $8,000 to $12,000
+
+5) Salesforce integration package
+- Includes Apex callout services, URL signing/builder, LWC UI, custom settings,
+  generation-job infrastructure, and Salesforce deployment packaging
+- 180 to 240 hours
+- Estimated value: $25,000 to $36,000
+
+6) Testing, local tooling, and deployment workflow
+- Includes Vitest coverage, test harnesses, clasp workflow, build scripts, and
+  developer operations setup
+- 70 to 110 hours
+- Estimated value: $8,000 to $14,000
+
+7) Documentation, hardening, and release overhead
+- Includes security notes, deployment instructions, review docs, and production
+  iteration evidence visible in the repo
+- 40 to 70 hours
+- Estimated value: $5,000 to $9,000
+
+Estimated total rebuild effort:
+- 740 to 1,070 hours
+
+Estimated total rebuild cost:
+- Rough floor: $110,000
+- Midpoint expectation: about $121,000
+- Upper practical range: $140,000+
+
+
+5. WHY THE CURRENT FAIR VALUE IS LOWER THAN REBUILD COST
+
+Software assets usually sell below full rebuild cost unless they have strong
+recurring revenue, a large user base, or unusually portable IP.
+
+Current value discounts visible from the repo:
+
+1) Platform concentration risk
+- Core operations still depend heavily on Apps Script, Sheets, and one execution
+  identity/quota pool.
+- This lowers portability and caps scalability.
+
+2) Security and hardening gaps still documented by the repo itself
+- Review documents call out open deployment exposure, signature hardening needs,
+  and operational risk around public endpoints and replay protection.
+
+3) Maintainability debt
+- Large single-file surfaces still exist in the Apps Script code and HTML pages.
+- That raises future maintenance cost for any buyer.
+
+4) Some roadmap value is still unrealized
+- The repo contains blueprint material for a more advanced Facebook push flow,
+  but that appears planned rather than fully shipped end-to-end.
+
+5) Niche buyer pool
+- This is a business-specific internal workflow tool, not a broad consumer app.
+- That reduces how many buyers can use it without adaptation.
+
+
+6. WHAT SUPPORTS A STRONGER VALUE
+
+This project still deserves a meaningful valuation because it already solves a
+real business workflow and contains non-trivial integration work.
+
+Value-supporting strengths:
+
+1) Production orientation is real
+- The repo includes live Apps Script deployment workflow, Salesforce deployment
+  workflow, sandbox refresh tooling, and versioned historical references.
+
+2) Dual-platform integration is expensive to reproduce
+- Salesforce + Apps Script + Google Sheets + OpenAI is a specialized stack.
+- Signed embedding and secure server-to-server call patterns add real value.
+
+3) It is more than a prototype
+- There are tests, docs, deployment scripts, architecture reviews, and current
+  operational guidance in the repo.
+
+4) The business workflow is specific and already modeled
+- Salesperson flows, listings management, analytics, manager view behavior, and
+  inventory-related operations are already encoded.
+
+5) Migration leverage exists
+- Even if a future team moves off Apps Script, this repo still shortens the path
+  because business rules, UI flow, sheet schema assumptions, and Salesforce data
+  exchange patterns are already documented and implemented.
+
+
+7. CURRENT FAIR-MARKET VALUE ESTIMATE
+
+My recommended present-value view is:
+
+- Conservative fair value: $60,000
+- Most likely fair value: $75,000
+- Strong strategic-buyer case: $95,000
+
+How that number was formed:
+- Start from a replacement value around $120,000
+- Discount 20% to 35% for platform risk, technical debt, and limited portability
+- Retain value because the system is already operationally useful and materially
+  reduces the time to deploy a working internal listing workflow
+
+That produces a realistic current value band of roughly $60,000 to $95,000.
+
+
+8. QUICK-SALE / ASSET-ONLY FLOOR
+
+If the project needed to be sold quickly, with minimal transition support and no
+proof of revenue, the likely code-asset floor is much lower.
+
+Estimated quick-sale floor:
+- $25,000 to $40,000
+
+Why the floor is not near zero:
+- The codebase is organized enough to be useful
+- The Salesforce package and Apps Script workflow save real implementation time
+- The documentation and testing make it more transferable than a raw prototype
+
+Why the floor is not higher:
+- The buyer still inherits platform risk and customization work
+- The addressable buyer pool is fairly narrow
+
+
+9. RECOMMENDED NEGOTIATION POSITION
+
+If you need one practical number to present, use:
+
+Suggested valuation: $75,000
+
+If you are negotiating with a buyer or partner who actively needs this exact
+workflow and understands what it would cost to rebuild, open at:
+
+Ask range: $85,000 to $95,000
+
+If you are discussing minimum defendable value, do not frame it below:
+
+Defensible floor: $60,000
+
+
+10. WHAT WOULD INCREASE THE VALUATION FASTEST
+
+The following improvements would make the project easier to defend at a higher
+value:
+
+1) Prove current business usage
+- Active users, listings generated per month, time saved, or sales lift
+
+2) Close the highest-risk hardening gaps
+- Restrict anonymous exposure, tighten signature model, reduce replay risk,
+  reduce hidden iframe fan-out load
+
+3) Ship the highest-value planned features fully
+- If Facebook push, queue controls, and stronger observability become fully live,
+  strategic value increases
+
+4) Reduce platform concentration risk
+- Separate critical backend functions from the most fragile Apps Script limits
+
+5) Add stronger test and operational evidence
+- Coverage growth, runbooks, monitoring, alerting, and deployment history all
+  make the asset easier for another team to trust
+
+
+11. BOTTOM LINE
+
+This project is not just a script bundle. It is a functioning internal software
+asset with:
+- a custom Google Apps Script application
+- a Salesforce integration package
+- AI-assisted listing generation
+- spreadsheet-backed operations
+- deployment workflow
+- tests and architecture documentation
+
+On a pure engineering replacement basis, it looks like a low-six-figure build.
+On a current asset basis, a realistic present value is about $75,000, with a
+reasonable range of $60,000 to $95,000 depending on buyer fit and whether the
+valuation is framed as a rebuild alternative or as a fast-transfer code asset.

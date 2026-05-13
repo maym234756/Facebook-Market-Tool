@@ -1,7 +1,6 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import vm from 'node:vm';
-import { fileURLToPath } from 'node:url';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import * as vm from 'node:vm';
 
 function createBaseContext(overrides = {}) {
   return {
@@ -51,9 +50,13 @@ function createBaseContext(overrides = {}) {
   };
 }
 
+/**
+ * @param {string[]} relativePaths
+ * @param {Record<string, any>} [overrides={}]
+ * @returns {Record<string, any>}
+ */
 export function loadAppsScriptFiles(relativePaths, overrides = {}) {
-  const currentFilePath = fileURLToPath(import.meta.url);
-  const projectRoot = path.resolve(path.dirname(currentFilePath), '..', '..');
+  const projectRoot = process.cwd();
   const context = createBaseContext(overrides);
   vm.createContext(context);
 

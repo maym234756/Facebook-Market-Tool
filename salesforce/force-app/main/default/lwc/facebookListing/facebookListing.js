@@ -1,7 +1,7 @@
 import { LightningElement, track } from 'lwc';
 import buildSignedUrl from '@salesforce/apex/FacebookListingUrlBuilder.buildSignedUrl';
 
-const EMBED_PAGES = ['listings', 'analytics', 'manager'];
+const EMBED_PAGES = ['listings', 'analytics', 'manager', 'index'];
 
 export default class FacebookListing extends LightningElement {
 
@@ -9,16 +9,19 @@ export default class FacebookListing extends LightningElement {
     @track listingsUrl  = null;
     @track analyticsUrl = null;
     @track managerUrl   = null;
+    @track indexUrl     = null;
 
     // Per-tab loading state
     @track listingsLoading  = true;
     @track analyticsLoading = true;
     @track managerLoading   = true;
+    @track indexLoading     = true;
 
     // Per-tab error state
     @track listingsError  = null;
     @track analyticsError = null;
     @track managerError   = null;
+    @track indexError     = null;
 
     _resizeHandler = null;
     _rafHandle = null;
